@@ -178,6 +178,12 @@ class _SettingPageState extends State<SettingPage> {
       padding: EdgeInsets.only(bottom: padding.bottom + 100),
       children: [
         _buildSearchItem(theme),
+        ListTile(
+          onTap: () => Get.toNamed('/settingFavorites'),
+          leading: const Icon(Icons.star_outline),
+          title: Text('收藏', style: titleStyle),
+          subtitle: Text('常用设置与最近修改', style: subTitleStyle),
+        ),
         ..._items
             .take(_items.length - 1)
             .map(

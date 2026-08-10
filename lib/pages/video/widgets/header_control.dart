@@ -382,6 +382,26 @@ class HeaderControlState extends State<HeaderControl>
                   dense: true,
                   onTap: () {
                     Get.back();
+                    videoDetailCtr.openSettingAndReload();
+                  },
+                  leading: const Icon(Icons.settings_outlined, size: 20),
+                  title: const Text('应用设置', style: titleStyle),
+                  subtitle: const Text('停止播放并重新载入', style: subTitleStyle),
+                ),
+                if (videoDetailCtr.currentUpMid != null)
+                  ListTile(
+                    dense: true,
+                    onTap: () {
+                      Get.back();
+                      _setCurrentUpSpeed();
+                    },
+                    leading: const Icon(Icons.person_outline, size: 20),
+                    title: const Text('设置该UP倍速', style: titleStyle),
+                  ),
+                ListTile(
+                  dense: true,
+                  onTap: () {
+                    Get.back();
                     introController.viewLater();
                   },
                   leading: const Icon(Icons.watch_later_outlined, size: 20),
@@ -881,6 +901,36 @@ class HeaderControlState extends State<HeaderControl>
           ],
         );
       },
+    );
+  }
+
+  void _setCurrentUpSpeed() {
+    final speeds = plPlayerController.speedList;
+    showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      clipBehavior: Clip.hardEdge,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            const Text('设置该UP倍速', style: titleStyle),
+            const SizedBox(height: 8),
+            ...speeds.map(
+              (speed) => ListTile(
+                dense: true,
+                title: Text('${speed}X', style: titleStyle),
+                onTap: () {
+                  Get.back();
+                  videoDetailCtr.setCurrentUpSpeed(speed);
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
     );
   }
 

@@ -44,6 +44,12 @@ List<SettingsModel> get playSettings => [
     title: '倍速设置',
     subtitle: '设置视频播放速度',
   ),
+  NormalModel(
+    onTap: (context, setState) => Get.toNamed('/speedAutoSet'),
+    leading: const Icon(Icons.auto_awesome_outlined),
+    title: '智能倍速',
+    subtitle: '视频/UP倍速记忆、本地规则与AI分类',
+  ),
   if (Platform.isAndroid)
     NormalModel(
       onTap: _showAngleDegreesDialog,

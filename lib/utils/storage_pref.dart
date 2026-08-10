@@ -859,6 +859,42 @@ abstract final class Pref {
   static double get longPressSpeedDefault =>
       _video.get(VideoBoxKey.longPressSpeedDefault, defaultValue: 3.0);
 
+  static double get quickSpeed1 =>
+      _video.get(VideoBoxKey.quickSpeed1, defaultValue: 1.5);
+
+  static double get quickSpeed2 =>
+      _video.get(VideoBoxKey.quickSpeed2, defaultValue: 2.0);
+
+  static bool get enableSpeedAi =>
+      _setting.get(SettingBoxKey.enableSpeedAi, defaultValue: false);
+
+  static String get speedAiBaseUrl =>
+      _setting.get(SettingBoxKey.speedAiBaseUrl, defaultValue: '');
+
+  static String get speedAiApiKey =>
+      _setting.get(SettingBoxKey.speedAiApiKey, defaultValue: '');
+
+  static String get speedAiModel =>
+      _setting.get(SettingBoxKey.speedAiModel, defaultValue: '');
+
+  static Map<String, double> get speedAiCategoryMap {
+    final map = _setting.get(SettingBoxKey.speedAiCategoryMap) as Map?;
+    if (map == null) return const {'音乐': 1.0};
+    return map.map(
+      (key, value) => MapEntry(key.toString(), (value as num).toDouble()),
+    );
+  }
+
+  static List<Map<String, dynamic>> get speedRules {
+    final list = _setting.get(SettingBoxKey.speedRules) as List?;
+    if (list == null) {
+      return const [
+        {'keyword': '音乐', 'speed': 1.0},
+      ];
+    }
+    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
   static bool get defaultShowComment =>
       _setting.get(SettingBoxKey.defaultShowComment, defaultValue: false);
 
