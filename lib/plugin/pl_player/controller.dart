@@ -30,6 +30,7 @@ import 'package:PiliPlus/plugin/pl_player/models/video_fit_type.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/danmaku_options.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart';
 import 'package:PiliPlus/services/service_locator.dart';
+import 'package:PiliPlus/services/playback_speed_service.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/android/android_helper.dart';
 import 'package:PiliPlus/utils/android/bindings.g.dart';
@@ -108,6 +109,8 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   late double lastPlaybackSpeed = 1.0;
   final RxDouble _playbackSpeed = Pref.playSpeedDefault.obs;
   late final RxDouble _longPressSpeed = Pref.longPressSpeedDefault.obs;
+  late final RxDouble quickSpeed1 = Pref.quickSpeed1.obs;
+  late final RxDouble quickSpeed2 = Pref.quickSpeed2.obs;
 
   final RxDouble volume = RxDouble(
     PlatformUtils.isDesktop ? Pref.desktopVolume : 1.0,
@@ -144,6 +147,9 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   int? _seasonId;
   int? _pgcType;
   VideoType _videoType = VideoType.ugc;
+  int? upMid;
+  String? upName;
+  String? videoTitle;
   int _heartDuration = 0;
   int? width;
   int? height;
@@ -160,6 +166,18 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   // final Durations durations;
 
   String get bvid => _bvid!;
+
+  int? get aid => _aid;
+
+  String? get videoBvid => _bvid;
+
+  int? get videoCid => cid;
+
+  int? get videoUpMid => upMid;
+
+  String? get videoUpName => upName;
+
+  String? get currentVideoTitle => videoTitle;
 
   /// 视频播放速度
   double get playbackSpeed => _playbackSpeed.value;
@@ -689,7 +707,10 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     // 初始化播放位置
     Duration? seekTo,
     // 初始化播放速度
-    double speed = 1.0,
+    double? speed,
+    int? upMid,
+    String? upName,
+    String? videoTitle,
     int? width,
     int? height,
     Duration? duration,
@@ -715,6 +736,13 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       this.height = height;
       this.dataSource = dataSource;
       _autoPlay = autoplay;
+      // 初始化视频倍速
+      if (speed != null) {
+        _playbackSpeed.value = speed;
+      }
+      this.upMid = upMid;
+      this.upName = upName;
+      this.videoTitle = videoTitle;
       // 初始化数据加载状态
       dataStatus.value = DataStatus.loading;
       // 初始化全屏方向
@@ -954,7 +982,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     if (_videoPlayerController != null) {
       final speed = isLive ? 1.0 : playbackSpeed;
       if (_videoPlayerController!.state.rate != speed) {
-        await setPlaybackSpeed(speed);
+        await setPlaybackSpeed(speed, save: false);
       }
     }
     _initVideoFit();
@@ -1203,7 +1231,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   }
 
   /// 设置倍速
-  Future<void> setPlaybackSpeed(double speed) async {
+  Future<void> setPlaybackSpeed(double speed, {bool save = true}) async {
     lastPlaybackSpeed = playbackSpeed;
 
     if (speed == _videoPlayerController?.state.rate) return;
@@ -1211,6 +1239,13 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     await _videoPlayerController?.setRate(speed);
     if (!isLive) _playbackSpeed.value = speed;
     _updatePlaybackState();
+    if (save && !isLive && _bvid != null && cid != null) {
+      await PlaybackSpeedService.saveVideoSpeed(
+        bvid: _bvid!,
+        cid: cid!,
+        speed: speed,
+      );
+    }
     if (danmakuController != null) {
       try {
         danmakuController?.updateOption(
@@ -1221,6 +1256,22 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         );
       } catch (_) {}
     }
+  }
+
+  /// 设置快捷倍速按钮对应的倍速
+  Future<void> setQuickSpeed(int index, double speed) async {
+    if (index == 0) {
+      quickSpeed1.value = speed;
+      await GStorage.video.put(VideoBoxKey.quickSpeed1, speed);
+    } else {
+      quickSpeed2.value = speed;
+      await GStorage.video.put(VideoBoxKey.quickSpeed2, speed);
+    }
+  }
+
+  /// 点击快捷倍速按钮
+  void toggleQuickSpeed(int index) {
+    setPlaybackSpeed(index == 0 ? quickSpeed1.value : quickSpeed2.value);
   }
 
   /// 播放视频
@@ -1366,12 +1417,13 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         HapticFeedback.lightImpact();
         await setPlaybackSpeed(
           enableAutoLongPressSpeed ? playbackSpeed * 2 : longPressSpeed,
+          save: false,
         );
       }
     } else {
       // if (kDebugMode) debugPrint('$playbackSpeed');
       longPressStatus.value = val;
-      await setPlaybackSpeed(lastPlaybackSpeed);
+      await setPlaybackSpeed(lastPlaybackSpeed, save: false);
     }
   }
 

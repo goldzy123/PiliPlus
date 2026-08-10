@@ -69,6 +69,12 @@ abstract final class SettingBoxKey {
       enableSearchWord = 'enableSearchWord',
       enableSystemProxy = 'enableSystemProxy',
       enableAi = 'enableAi',
+      enableSpeedAi = 'enableSpeedAi',
+      speedAiBaseUrl = 'speedAiBaseUrl',
+      speedAiApiKey = 'speedAiApiKey',
+      speedAiModel = 'speedAiModel',
+      speedAiCategoryMap = 'speedAiCategoryMap',
+      speedRules = 'speedRules',
       disableLikeMsg = 'disableLikeMsg',
       defaultHomePage = 'defaultHomePage',
       previewQuality = 'previewQuality',
@@ -256,6 +262,8 @@ abstract final class VideoBoxKey {
   static const String playRepeat = 'playRepeat',
       playSpeedDefault = 'playSpeedDefault',
       longPressSpeedDefault = 'longPressSpeedDefault',
+      quickSpeed1 = 'quickSpeed1',
+      quickSpeed2 = 'quickSpeed2',
       speedsList = 'speedsList',
       cacheVideoFit = 'cacheVideoFit';
 }
