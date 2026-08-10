@@ -51,6 +51,7 @@ import 'package:PiliPlus/plugin/pl_player/models/data_source.dart';
 import 'package:PiliPlus/plugin/pl_player/models/heart_beat_type.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
+import 'package:PiliPlus/services/playback_speed_service.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/connectivity_utils.dart';
 import 'package:PiliPlus/utils/extension/context_ext.dart';
@@ -731,6 +732,31 @@ class VideoDetailController extends GetxController
     Duration? seek = defaultST ?? playedTime;
     if (seek == .zero) seek = null;
     seek ??= getFirstSegment();
+
+    int? upMid;
+    String? upName;
+    String? videoTitle;
+    if (!isFileSource) {
+      try {
+        final detail = isUgc
+            ? Get.find<UgcIntroController>(tag: heroTag).videoDetail.value
+            : Get.find<PgcIntroController>(tag: heroTag).videoDetail.value;
+        upMid = detail.owner?.mid;
+        upName = detail.owner?.name;
+        videoTitle = detail.title;
+      } catch (_) {}
+    }
+    double? resolvedSpeed = PlaybackSpeedService.resolveSpeed(
+      bvid: bvid,
+      cid: cid.value,
+      upMid: upMid,
+      upName: upName,
+      title: videoTitle,
+    );
+    if (args['speed'] is num) {
+      resolvedSpeed = (args['speed'] as num).toDouble();
+    }
+
     await plPlayerController.setDataSource(
       isFileSource
           ? FileSource(
@@ -747,6 +773,10 @@ class VideoDetailController extends GetxController
       duration: data.timeLength == null
           ? null
           : Duration(milliseconds: data.timeLength!),
+      speed: resolvedSpeed,
+      upMid: upMid,
+      upName: upName,
+      videoTitle: videoTitle,
       isVertical: isVertical.value,
       aid: aid,
       bvid: bvid,
@@ -764,6 +794,14 @@ class VideoDetailController extends GetxController
       height: firstVideo.height,
       volume: volume,
       autoFullScreenFlag: autoFullScreenFlag,
+    );
+
+    unawaited(
+      PlaybackSpeedService.warmAi(
+        upMid: upMid,
+        upName: upName,
+        title: videoTitle,
+      ),
     );
 
     if (isClosed) return;
@@ -820,6 +858,54 @@ class VideoDetailController extends GetxController
     if (result case Success(:final response)) {
       data.dash!.video!.merge(response.dash?.video);
     }
+  }
+
+  /// 从播放页进入设置，返回后停播并重新加载当前视频
+  Future<void> openSettingAndReload() async {
+    playedTime = plPlayerController.videoPlayerController?.state.position;
+    await plPlayerController.pause();
+    await Get.toNamed('/setting');
+    if (isClosed) return;
+    _autoPlay.value = true;
+    queryVideoUrl(fromReset: true);
+  }
+
+  int? get currentUpMid {
+    if (isFileSource) return null;
+    try {
+      final detail = isUgc
+          ? Get.find<UgcIntroController>(tag: heroTag).videoDetail.value
+          : Get.find<PgcIntroController>(tag: heroTag).videoDetail.value;
+      return detail.owner?.mid;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? get currentUpName {
+    if (isFileSource) return null;
+    try {
+      final detail = isUgc
+          ? Get.find<UgcIntroController>(tag: heroTag).videoDetail.value
+          : Get.find<PgcIntroController>(tag: heroTag).videoDetail.value;
+      return detail.owner?.name;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void setCurrentUpSpeed(double speed) {
+    final mid = currentUpMid;
+    if (mid == null) {
+      SmartDialog.showToast('当前视频没有UP主');
+      return;
+    }
+    PlaybackSpeedService.setUpSpeed(
+      mid: mid,
+      speed: speed,
+      name: currentUpName,
+    );
+    SmartDialog.showToast('已为该UP设置 ${speed}X');
   }
 
   Volume? volume;

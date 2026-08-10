@@ -30,6 +30,7 @@ import 'package:PiliPlus/pages/common/common_intro_controller.dart';
 import 'package:PiliPlus/pages/danmaku/danmaku_model.dart';
 import 'package:PiliPlus/pages/live_room/widgets/bottom_control.dart'
     as live_bottom;
+import 'package:PiliPlus/pages/lan_sync/panel.dart';
 import 'package:PiliPlus/pages/video/controller.dart';
 import 'package:PiliPlus/pages/video/introduction/pgc/controller.dart';
 import 'package:PiliPlus/pages/video/post_panel/popup_menu_text.dart';
@@ -49,6 +50,7 @@ import 'package:PiliPlus/plugin/pl_player/widgets/common_btn.dart';
 import 'package:PiliPlus/plugin/pl_player/widgets/forward_seek.dart';
 import 'package:PiliPlus/plugin/pl_player/widgets/mpv_convert_webp.dart';
 import 'package:PiliPlus/plugin/pl_player/widgets/play_pause_btn.dart';
+import 'package:PiliPlus/services/lan_sync/lan_sync_service.dart';
 import 'package:PiliPlus/utils/android/bindings.g.dart';
 import 'package:PiliPlus/utils/cache_manager.dart';
 import 'package:PiliPlus/utils/connectivity_utils.dart';
@@ -789,6 +791,41 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
         ),
       ),
 
+      BottomControlType.lanSync => Obx(() {
+        final count = LanSyncService.instance.peers.length;
+        return ComBtn(
+          width: widgetWidth,
+          height: 30,
+          tooltip: '局域网设备',
+          icon: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              const Icon(Icons.devices, size: 20, color: Colors.white),
+              if (count > 0)
+                Positioned(
+                  right: -6,
+                  top: -6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 1,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '$count',
+                      style: const TextStyle(color: Colors.white, fontSize: 9),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          onTap: () => LanSyncPanel.show(context),
+        );
+      }),
+
       BottomControlType.qa => Obx(
         () {
           final VideoQuality? currentVideoQa =
@@ -901,17 +938,105 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       if (isNotFileSource) .aiTranslate,
       .subtitle,
       .speed,
+      if (Platform.isAndroid) .lanSync,
       if (isNotFileSource && flag) .qa,
       if (!plPlayerController.isDesktopPip) .fullscreen,
     ];
-    return PlayerBar(
-      left: Row(
-        mainAxisSize: .min,
-        children: userSpecifyItemLeft.map(progressWidget).toList(),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        PlayerBar(
+          left: Row(
+            mainAxisSize: .min,
+            children: userSpecifyItemLeft.map(progressWidget).toList(),
+          ),
+          right: Row(
+            mainAxisSize: .min,
+            children: userSpecifyItemRight.map(progressWidget).toList(),
+          ),
+        ),
+        _buildQuickSpeedBar(),
+      ],
+    );
+  }
+
+  Widget _buildQuickSpeedBar() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _quickSpeedButton(0),
+          const SizedBox(width: 8),
+          _quickSpeedButton(1),
+        ],
       ),
-      right: Row(
-        mainAxisSize: .min,
-        children: userSpecifyItemRight.map(progressWidget).toList(),
+    );
+  }
+
+  Widget _quickSpeedButton(int index) {
+    return Obx(() {
+      final speed = index == 0
+          ? plPlayerController.quickSpeed1.value
+          : plPlayerController.quickSpeed2.value;
+      return ComBtn(
+        width: 58,
+        height: 24,
+        tooltip: index == 0 ? '快捷倍速 1' : '快捷倍速 2',
+        icon: Container(
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            '${speed}X',
+            style: const TextStyle(color: Colors.white, fontSize: 12),
+          ),
+        ),
+        onTap: () => plPlayerController.toggleQuickSpeed(index),
+        onLongPress: () => _editQuickSpeed(index),
+      );
+    });
+  }
+
+  void _editQuickSpeed(int index) {
+    final speeds = plPlayerController.speedList;
+    showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      clipBehavior: Clip.hardEdge,
+      backgroundColor: Colors.black.withValues(alpha: 0.9),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            Text(
+              index == 0 ? '设置快捷倍速 1' : '设置快捷倍速 2',
+              style: const TextStyle(fontSize: 14, color: Colors.white),
+            ),
+            const SizedBox(height: 8),
+            ...speeds.map(
+              (speed) => ListTile(
+                dense: true,
+                title: Text(
+                  '${speed}X',
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                ),
+                onTap: () async {
+                  Get.back();
+                  await plPlayerController.setQuickSpeed(index, speed);
+                  SmartDialog.showToast(
+                    '快捷倍速 ${index + 1} 已设为 ${speed}X',
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
       ),
     );
   }

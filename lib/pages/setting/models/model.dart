@@ -4,6 +4,7 @@ import 'package:PiliPlus/pages/setting/widgets/normal_item.dart';
 import 'package:PiliPlus/pages/setting/widgets/popup_item.dart';
 import 'package:PiliPlus/pages/setting/widgets/select_dialog.dart';
 import 'package:PiliPlus/pages/setting/widgets/switch_item.dart';
+import 'package:PiliPlus/pages/setting/setting_favorites.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -57,10 +58,18 @@ class SplitModel extends SettingsModel {
     subtitle: effectiveSubtitle,
     setKey: switchModel.setKey,
     defaultVal: switchModel.defaultVal,
-    onChanged: switchModel.onChanged,
+    onChanged: (val) {
+      switchModel.onChanged?.call(val);
+      SettingFavorites.recordRecent(effectiveTitle);
+    },
     needReboot: switchModel.needReboot,
     leading: normalModel.leading,
-    onTap: switchModel.onTap,
+    onTap: switchModel.onTap == null
+        ? null
+        : (context) {
+            switchModel.onTap!(context);
+            SettingFavorites.recordRecent(effectiveTitle);
+          },
     contentPadding: contentPadding,
     titleStyle: titleStyle,
     isSplit: true,
@@ -101,7 +110,10 @@ class PopupModel<T extends EnumWithLabel> extends SettingsModel {
       return (v, v.label);
     },
     itemBuilder: (_) => enumItemBuilder(items),
-    onSelected: onSelected,
+    onSelected: (value, setState) {
+      onSelected(value, setState);
+      SettingFavorites.recordRecent(effectiveTitle);
+    },
   );
 }
 
@@ -150,7 +162,12 @@ class NormalModel extends SettingsModel {
     getSubtitle: getSubtitle,
     leading: leading,
     getTrailing: getTrailing,
-    onTap: onTap,
+    onTap: onTap == null
+        ? null
+        : (context, setState) {
+            onTap!(context, setState);
+            SettingFavorites.recordRecent(effectiveTitle);
+          },
     contentPadding: contentPadding,
     titleStyle: titleStyle,
   );
@@ -197,10 +214,18 @@ class SwitchModel extends SettingsModel {
     subtitle: subtitle,
     setKey: setKey,
     defaultVal: defaultVal,
-    onChanged: onChanged,
+    onChanged: (val) {
+      onChanged?.call(val);
+      SettingFavorites.recordRecent(effectiveTitle);
+    },
     needReboot: needReboot,
     leading: leading,
-    onTap: onTap,
+    onTap: onTap == null
+        ? null
+        : (context) {
+            onTap!(context);
+            SettingFavorites.recordRecent(effectiveTitle);
+          },
     contentPadding: contentPadding,
     titleStyle: titleStyle,
   );
