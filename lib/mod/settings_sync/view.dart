@@ -29,7 +29,6 @@ class _SettingsSyncPageState extends State<SettingsSyncPage> {
     text: SyncConfig.profile,
   );
   late bool _auto = SyncConfig.auto;
-  late bool _enabled = SyncConfig.enabled;
 
   @override
   void dispose() {
@@ -60,9 +59,7 @@ class _SettingsSyncPageState extends State<SettingsSyncPage> {
       SmartDialog.showToast('$e');
     } finally {
       _svc.busy.value = false;
-      if (mounted) {
-        setState(() => _enabled = SyncConfig.enabled);
-      }
+      if (mounted) setState(() {});
     }
   }
 
@@ -139,18 +136,25 @@ class _SettingsSyncPageState extends State<SettingsSyncPage> {
             );
           }),
           const SizedBox(height: 8),
+          // 一个开关就是全部：开了就启动服务（自动上传 + 定时拉取），关了就停。
+          // 之前这里还有一个单独的「开启自动同步」按钮，两个控制语义重叠，
+          // 很容易只开一半（开关没开 → 服务在跑但不拉取），已合并。
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('自动同步'),
-            subtitle: const Text('本机改动自动上传；每 20 秒检查远端是否有更新并拉取'),
+            subtitle: const Text(
+              '开启后：本机改动自动上传；每 20 秒检查远端是否有更新并拉取',
+            ),
             value: _auto,
-            onChanged: (v) async {
+            onChanged: (v) => _guard(() async {
               setState(() => _auto = v);
               SyncConfig.auto = v;
-              if (SyncConfig.enabled) {
+              if (v) {
                 await _svc.start();
+              } else {
+                _svc.stop();
               }
-            },
+            }),
           ),
           const Divider(),
           Row(
@@ -179,27 +183,6 @@ class _SettingsSyncPageState extends State<SettingsSyncPage> {
             label: const Text('把本机配置上传'),
           ),
           const SizedBox(height: 10),
-          // 注意：这里不能用 Obx —— SyncConfig.enabled 是普通 Hive getter，
-          // 不是可观察量，GetX 会报 "improper use of a GetX" 并在 release 下渲染成灰块。
-          if (_enabled)
-            OutlinedButton.icon(
-              onPressed: () {
-                _svc.stop();
-                setState(() => _enabled = SyncConfig.enabled);
-                SmartDialog.showToast('已关闭自动同步');
-              },
-              icon: const Icon(Icons.stop_circle_outlined),
-              label: const Text('关闭自动同步'),
-            )
-          else
-            FilledButton.tonalIcon(
-              onPressed: () => _guard(() async {
-                await _svc.start();
-                if (mounted) setState(() => _enabled = SyncConfig.enabled);
-              }),
-              icon: const Icon(Icons.play_circle_outline),
-              label: const Text('开启自动同步'),
-            ),
           const SizedBox(height: 20),
           Obx(() {
             final last = SyncConfig.lastSyncAt;

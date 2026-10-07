@@ -58,14 +58,40 @@ want=sys.argv[1]
 xml=open('/tmp/_ui.xml',encoding='utf-8',errors='ignore').read()
 for m in re.finditer(r'<node[^>]*>', xml):
     n=m.group(0)
+    # 同时看 text 和 content-desc：底部导航 tab、图标按钮的文字都在 content-desc 里
     t=re.search(r'text="([^"]*)"', n)
-    if not t or want not in t.group(1): continue
+    d=re.search(r'content-desc="([^"]*)"', n)
+    hay=(t.group(1) if t else '')+'\n'+(d.group(1) if d else '')
+    if want not in hay: continue
     b=re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', n)
     if not b: continue
     x1,y1,x2,y2=map(int,b.groups())
     print(f"{(x1+x2)//2} {(y1+y2)//2}"); sys.exit(0)
 sys.exit(1)
 PY
+)
+  [ -z "$xy" ] && return 1
+  $ADB -s "$SER" shell "input tap $xy"
+  return 0
+}
+
+tap_nav() {  # 点底部导航 tab：按 content-desc 前缀 + "标签" 匹配，避免和页面里的同名文字混淆
+  dump > /tmp/_ui.xml
+  local xy
+  xy=$(python3 - "$1" <<'PYNAV'
+import re,sys
+want=sys.argv[1]
+xml=open('/tmp/_ui.xml',encoding='utf-8',errors='ignore').read()
+for m in re.finditer(r'<node[^>]*>', xml):
+    n=m.group(0)
+    d=re.search(r'content-desc="([^"]*)"', n)
+    if not d: continue
+    if d.group(1).startswith(want) and '标签' in d.group(1):
+        b=re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', n)
+        if b:
+            x1,y1,x2,y2=map(int,b.groups()); print(f"{(x1+x2)//2} {(y1+y2)//2}"); sys.exit(0)
+sys.exit(1)
+PYNAV
 )
   [ -z "$xy" ] && return 1
   $ADB -s "$SER" shell "input tap $xy"
@@ -241,6 +267,113 @@ if curl -s --max-time 5 "${SERVER}/health" | grep -q '"ok":true'; then
   curl -s "${SERVER}/api/profiles" | grep -q "$PROF" && ok "配置列表里能看到 $PROF" || bad "配置列表里没有 $PROF"
 else
   bad "同步服务不可达（${SERVER}）—— launchctl print gui/\$(id -u)/com.nana.piliplus-settings 看看"
+fi
+echo
+
+
+# ── 6. 自动同步：别处改了配置，本机自动跟着改 ────────────────────────
+echo "── 6. 配置同步的自动下发（改服务端 → 本机自动拉取）"
+if ! curl -s --max-time 5 "${SERVER}/health" | grep -q '"ok":true'; then
+  skip "同步服务不可达，跳过自动同步测试"
+else
+  # 从确定的起点出发：重启 App，再走 我的 → 设置 → 配置同步
+  $ADB -s "$SER" shell "am force-stop $PKG" >/dev/null 2>&1
+  $ADB -s "$SER" shell "am start -n $PKG/com.example.piliplus.MainActivity" >/dev/null 2>&1
+  sleep 16
+  tap_text "不再提醒" >/dev/null 2>&1
+  tap_nav "我的" >/dev/null 2>&1; sleep 4
+  tap_text "设置" >/dev/null 2>&1; sleep 3
+  tap_text "配置同步" >/dev/null 2>&1; sleep 4
+
+  if ! has_text "服务器地址"; then
+    shot 06-navfail
+    skip "没能进到配置同步页（截图 06-navfail.png）"
+  else
+    # 直接用 App 里已经配好的配置名（避免弹键盘：键盘会挡住下面的按钮，
+    # 而 BACK/ESC 收键盘会连带把页面退掉——两个都踩过）
+    dump > /tmp/_ui.xml
+    PROF=$(python3 - <<'PYPROF'
+import re
+x=open('/tmp/_ui.xml',encoding='utf-8',errors='ignore').read()
+m=re.search(r'配置名：([^\u3000<]+)', x)
+print(m.group(1).strip() if m else '')
+PYPROF
+)
+    if [ -z "$PROF" ]; then
+      skip "App 里还没配配置名（先手动配一次再跑），跳过"
+    else
+      echo "      使用 App 里已配置的配置档：$PROF"
+
+      # 打开自动同步开关（幂等；dump 是单行 XML，必须按节点属性判断）
+      dump > /tmp/_ui.xml
+      checked=$(python3 - <<'PYSW'
+import re
+x=open('/tmp/_ui.xml',encoding='utf-8',errors='ignore').read()
+for m in re.finditer(r'<node[^>]*>', x):
+    n=m.group(0)
+    if '自动同步' not in n: continue
+    c=re.search(r'checked="([^"]*)"', n)
+    if c: print(c.group(1)); break
+else: print('?')
+PYSW
+)
+      if [ "$checked" != "true" ]; then
+        tap_text "自动同步" >/dev/null 2>&1; sleep 3
+        ok "已打开「自动同步」开关"
+      else
+        ok "「自动同步」开关本来就是开的"
+      fi
+
+      # 先上传一次，保证服务端有这个配置档
+      tap_text "把本机配置上传" >/dev/null 2>&1; sleep 5
+      REV=$(curl -s "${SERVER}/api/profiles/${PROF}" | python3 -c "import sys,json;print(json.load(sys.stdin).get('rev',0))" 2>/dev/null)
+      if [ -z "$REV" ] || [ "$REV" = "0" ]; then
+        skip "配置档 ${PROF} 在服务端不存在，跳过"
+      else
+        ok "配置档 ${PROF} 已就绪（rev ${REV}）"
+        # 记录一下：上传后本机自己的 rev 应该稳定不再涨（验证没有上传循环）
+        sleep 6
+        REV2=$(curl -s "${SERVER}/api/profiles/${PROF}" | python3 -c "import sys,json;print(json.load(sys.stdin).get('rev',0))" 2>/dev/null)
+        if [ "$REV2" = "$REV" ]; then
+          ok "静置 6 秒 rev 没有自己上涨（没有上传循环）"
+        else
+          bad "静置 6 秒 rev 从 ${REV} 涨到 ${REV2}（存在上传循环）"
+        fi
+
+        # 模拟另一台设备改配置：服务端把 fullScreenMode 改成 1
+        curl -s "${SERVER}/api/profiles/${PROF}" > /tmp/_prof.json
+        python3 - <<'PYPUT'
+import json
+d=json.load(open('/tmp/_prof.json'))
+d['data']['boxes'].setdefault('setting',{})['fullScreenMode']=1
+json.dump({'data':d['data'],'baseRev':d['rev'],'device':'other-device'}, open('/tmp/_put.json','w'))
+PYPUT
+        NEWREV=$(curl -s -X PUT "${SERVER}/api/profiles/${PROF}" -H 'content-type: application/json' -d @/tmp/_put.json \
+          | python3 -c "import sys,json;print(json.load(sys.stdin).get('rev',0))" 2>/dev/null)
+        echo "      服务端已改成 rev ${NEWREV}（模拟另一台设备修改）"
+
+        pulled=0
+        for i in 1 2 3 4 5 6; do
+          sleep 6
+          has_text "已拉取" && { pulled=1; break; }
+        done
+        shot 06-pulled
+        if [ "$pulled" = "1" ]; then
+          ok "本机在 30 秒内自动拉取了远端改动"
+        else
+          dump > /tmp/_ui.xml
+          python3 - <<'PYSHOW'
+import re
+x=open('/tmp/_ui.xml',encoding='utf-8',errors='ignore').read()
+for m in re.finditer(r'(?:text|content-desc)="([^"]*)"', x):
+    if '状态：' in m.group(1):
+        print('      当前状态：', m.group(1)[:120])
+PYSHOW
+          bad "等了 30 秒本机没有自动拉取远端改动"
+        fi
+      fi
+    fi
+  fi
 fi
 echo
 

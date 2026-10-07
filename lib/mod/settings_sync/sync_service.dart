@@ -321,6 +321,13 @@ class SettingsSyncService extends GetxController {
 
   void _onLocalChange(BoxEvent event) {
     if (_applying || !SyncConfig.auto) return;
+    // 关键：忽略同步自己的记账键。
+    // push()/pull() 会写 mod_sync_rev、mod_sync_last_at，而它们也在 setting box 里，
+    // 不排除的话：上传 → 写 rev → 触发本监听 → 又上传 …… 无限循环；
+    // 循环期间 busy 一直为 true，定时拉取会被 if (busy.value) return 整个饿死，
+    // 表现就是"自动下发永远不生效"（实测踩到，rev 一路涨到 37）。
+    final key = event.key?.toString() ?? '';
+    if (key.startsWith('mod_sync_') || key == 'mod_local_videos') return;
     _debounce?.cancel();
     _debounce = Timer(const Duration(seconds: 3), () async {
       if (busy.value || _applying) return;
