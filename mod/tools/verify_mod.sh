@@ -16,7 +16,19 @@ OUT="${OUT_DIR:-$REPO/_dsh/verify-out}"
 PKG=com.example.piliplus.dev
 APK="${APK:-$REPO/_dsh/PiliPlus-mod-2.1.6-arm64-dev.apk}"
 [ -f "$APK" ] || APK=$(ls -t "$REPO"/build/app/outputs/flutter-apk/app-release.apk 2>/dev/null | head -1)
-SERVER=${SYNC_SERVER:-http://127.0.0.1:8720}
+# 注意：脚本要两个地址
+#   · curl 在 Mac 上跑，用哪个都行
+#   · 但填进手机里的必须是 Mac 的局域网 IP —— 默认值写成 127.0.0.1 的话
+#     手机上连的是它自己，会 Connection refused（在 S20 上踩过）
+mac_ip() {
+  for i in en0 en8 en1 en2 en3; do
+    local ip
+    ip=$(ipconfig getifaddr "$i" 2>/dev/null)
+    case "$ip" in 192.168.*|10.*|172.1[6-9].*|172.2[0-9].*|172.3[01].*) echo "$ip"; return 0 ;; esac
+  done
+  echo 127.0.0.1
+}
+SERVER=${SYNC_SERVER:-http://$(mac_ip):8720}
 
 mkdir -p "$OUT"
 PASS=0; FAIL=0; SKIP=0
@@ -43,22 +55,32 @@ echo "型号: $MODEL  SDK: $SDK"
 echo
 
 # ── 工具函数 ──────────────────────────────────────────────────────────
-dump() {  # 输出当前界面的 uiautomator XML
-  $ADB -s "$SER" shell "uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; cat /sdcard/ui.xml" 2>/dev/null
+dump() {  # 输出当前界面的 uiautomator XML（保证是新鲜的）
+  # uiautomator dump 偶发失败（界面还在动）会留下上一次的文件，直接 cat 会拿到
+  # 过期内容，导致"明明在页面上却判断没进去"（在 S20 上踩过）。
+  local out=""
+  for _ in 1 2 3; do
+    $ADB -s "$SER" shell "rm -f /sdcard/ui.xml" >/dev/null 2>&1
+    $ADB -s "$SER" shell "uiautomator dump /sdcard/ui.xml" >/dev/null 2>&1
+    out=$($ADB -s "$SER" shell "cat /sdcard/ui.xml 2>/dev/null" 2>/dev/null)
+    case "$out" in *"<hierarchy"*) printf '%s' "$out"; return 0 ;; esac
+    sleep 1
+  done
+  printf '%s' "$out"
 }
+
 shot() { $ADB -s "$SER" exec-out screencap -p > "$OUT/$1.png" 2>/dev/null; }
 
-# 按文本点击（从 dump 里找 bounds 中心）
+# 按文本/描述点击（text 与 content-desc 都看：底部 tab、图标按钮的文字在 content-desc 里）
 tap_text() {
   dump > /tmp/_ui.xml
   local xy
-  xy=$(python3 - "$1" <<'PY'
+  xy=$(python3 - "$1" <<'PYTAP'
 import re,sys
 want=sys.argv[1]
 xml=open('/tmp/_ui.xml',encoding='utf-8',errors='ignore').read()
 for m in re.finditer(r'<node[^>]*>', xml):
     n=m.group(0)
-    # 同时看 text 和 content-desc：底部导航 tab、图标按钮的文字都在 content-desc 里
     t=re.search(r'text="([^"]*)"', n)
     d=re.search(r'content-desc="([^"]*)"', n)
     hay=(t.group(1) if t else '')+'\n'+(d.group(1) if d else '')
@@ -68,14 +90,14 @@ for m in re.finditer(r'<node[^>]*>', xml):
     x1,y1,x2,y2=map(int,b.groups())
     print(f"{(x1+x2)//2} {(y1+y2)//2}"); sys.exit(0)
 sys.exit(1)
-PY
+PYTAP
 )
   [ -z "$xy" ] && return 1
   $ADB -s "$SER" shell "input tap $xy"
   return 0
 }
 
-tap_nav() {  # 点底部导航 tab：按 content-desc 前缀 + "标签" 匹配，避免和页面里的同名文字混淆
+tap_nav() {  # 点底部导航 tab：按 content-desc 前缀 + "标签" 匹配，避免和页面同名文字混淆
   dump > /tmp/_ui.xml
   local xy
   xy=$(python3 - "$1" <<'PYNAV'
@@ -96,6 +118,78 @@ PYNAV
   [ -z "$xy" ] && return 1
   $ADB -s "$SER" shell "input tap $xy"
   return 0
+}
+
+edit_xy() {  # $1 = 第几个 EditText（1=服务器地址 2=口令 3=配置名）
+  # 不要按 hint 文字找：字段为空时 Flutter 不把 hint 暴露到语义树里，
+  # S20 上抓不到「服务器地址」节点（米13 因为字段有值才碰巧能抓到）。
+  # 按 EditText 序号定位，两台设备都稳。
+  dump > /tmp/_ui.xml
+  python3 - "$1" <<'PYED'
+import re,sys
+want=int(sys.argv[1])
+x=open('/tmp/_ui.xml',encoding='utf-8',errors='ignore').read()
+i=0
+for m in re.finditer(r'<node[^>]*>', x):
+    node=m.group(0)
+    if 'android.widget.EditText' not in node: continue
+    i+=1
+    if i==want:
+        b=re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', node)
+        if b:
+            x1,y1,x2,y2=map(int,b.groups()); print(f"{(x1+x2)//2} {(y1+y2)//2}"); sys.exit(0)
+sys.exit(1)
+PYED
+}
+
+fill_field_idx() {  # $1=第几个输入框 $2=内容
+  local xy
+  xy=$(edit_xy "$1")
+  if [ -n "$xy" ]; then
+    $ADB -s "$SER" shell "input tap $xy"; sleep 2
+  else
+    local name
+    case "$1" in 1) name="服务器地址";; 2) name="口令";; 3) name="配置名";; *) name="";; esac
+    [ -n "$name" ] || return 1
+    tap_text "$name" >/dev/null 2>&1 || return 1
+    sleep 2
+  fi
+  # 确认输入法起来了（BACK 在键盘弹起时只收键盘，不会退出页面）
+  local shown
+  shown=$($ADB -s "$SER" shell "dumpsys input_method | grep -m1 mInputShown" 2>/dev/null | tr -d '\r')
+  case "$shown" in
+    *"mInputShown=true"*) : ;;
+    *) [ -n "$xy" ] && { $ADB -s "$SER" shell "input tap $xy"; sleep 2; } ;;
+  esac
+  # 清空 + 输入 + 读回校验（只删 12 次会留下旧值残留，拼出来的地址是坏的——踩过）
+  local got=""
+  for attempt in 1 2 3; do
+    $ADB -s "$SER" shell "input keyevent KEYCODE_MOVE_END" >/dev/null 2>&1
+    for _ in $(seq 1 60); do $ADB -s "$SER" shell "input keyevent KEYCODE_DEL" >/dev/null 2>&1; done
+    $ADB -s "$SER" shell "input text '$2'" >/dev/null 2>&1; sleep 2
+    got=$(edit_text_of "$1")
+    [ "$got" = "$2" ] && break
+    echo "      （第 ${attempt} 次填写得到 '${got}'，不符，重试）"
+  done
+  $ADB -s "$SER" shell "input keyevent KEYCODE_BACK" >/dev/null 2>&1; sleep 2
+}
+
+edit_text_of() {  # 读第 $1 个 EditText 当前的值（用来判断要不要重填）
+  dump > /tmp/_ui.xml
+  python3 - "$1" <<'PYET'
+import re,sys
+want=int(sys.argv[1])
+x=open('/tmp/_ui.xml',encoding='utf-8',errors='ignore').read()
+i=0
+for m in re.finditer(r'<node[^>]*>', x):
+    node=m.group(0)
+    if 'android.widget.EditText' not in node: continue
+    i+=1
+    if i==want:
+        t=re.search(r'text="([^"]*)"', node)
+        print(t.group(1) if t else ''); sys.exit(0)
+sys.exit(1)
+PYET
 }
 
 has_text() {  # 当前界面是否含某文本
@@ -285,7 +379,7 @@ else
   tap_text "设置" >/dev/null 2>&1; sleep 3
   tap_text "配置同步" >/dev/null 2>&1; sleep 4
 
-  if ! has_text "服务器地址"; then
+  if ! has_text "把本机配置上传"; then
     shot 06-navfail
     skip "没能进到配置同步页（截图 06-navfail.png）"
   else
@@ -299,8 +393,18 @@ m=re.search(r'配置名：([^\u3000<]+)', x)
 print(m.group(1).strip() if m else '')
 PYPROF
 )
-    if [ -z "$PROF" ]; then
-      skip "App 里还没配配置名（先手动配一次再跑），跳过"
+    cur_url=$(edit_text_of 1)
+    if [ "$cur_url" != "${SERVER}" ]; then
+      echo "      服务器地址需要重填（当前 '${cur_url}' → '${SERVER}'）"
+      fill_field_idx 1 "${SERVER}"
+    fi
+    if [ -z "$PROF" ] || [ "$PROF" = "（未设置）" ] || ! has_text "把本机配置上传"; then
+      echo "      配置名还没配，自动填一次"
+      fill_field_idx 3 "verify-${MODEL}"
+      PROF="verify-${MODEL}"
+    fi
+    if ! has_text "把本机配置上传"; then
+      skip "填完配置后没回到配置同步页，跳过"
     else
       echo "      使用 App 里已配置的配置档：$PROF"
 
