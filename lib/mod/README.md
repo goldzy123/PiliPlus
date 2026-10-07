@@ -13,6 +13,7 @@
 | `local_video/` | 本地视频 tab：`controller.dart`（选片/持久化/打开）、`view.dart` |
 | `settings_sync/` | 配置同步：`sync_service.dart`（采集/应用/上传/拉取/自动同步）、`view.dart` |
 | `../mod/server/` | 配置同步的服务端（Mac 常驻的小 HTTP 服务，零依赖 Node） |
+| `../mod/tools/` | `verify_mod.sh`：一条命令跑完整验证（本地 tab / 卡片日期 / 倍速按钮位置 / 拖动不冻结 / 同步服务），不依赖机型坐标（用 uiautomator 找元素） |
 
 ## 合并策略（重要）
 
@@ -65,6 +66,21 @@ mod 自己的持久化键统一加前缀，避免和官方键冲突：
 - `mod_local_videos`（本地视频列表）
 
 设置项收藏用的是官方 `setting` box 里的 `favoriteSettingIds` / `recentSettingIds`。
+
+## 验证
+
+```bash
+bash mod/tools/verify_mod.sh                     # 自动挑设备
+bash mod/tools/verify_mod.sh 192.168.6.140:5555  # 指定设备
+APK=/path/to.apk bash mod/tools/verify_mod.sh    # 指定 APK
+```
+
+会逐项打印 PASS / FAIL / SKIP 并留下截图与录像（默认 `_dsh/verify-out/`）。
+拖动冻结那一项用的是**拖动前后对比基线 + 逐秒平均绝对差**，不是固定阈值
+——暗场景/静态镜头下固定阈值会误判（踩过），基线太低时它会自己判 SKIP 而不是误报。
+
+只有两项需要人工看：长按倍速按钮是否变成「实心圆角矩形+人形图标」、
+点按是否变成「胶囊描边+对勾」。
 
 ## 编译
 
