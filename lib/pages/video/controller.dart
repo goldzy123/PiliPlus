@@ -427,7 +427,9 @@ class VideoDetailController extends GetxController
     if (isFileSource) {
       // [MOD-HOOK:local-video] 本地视频走独立分支，不依赖 B 站下载目录结构
       if (args['localVideoPath'] case final String localPath) {
-        initLocalVideo(localPath, args['localVideoTitle'] as String?);
+        // 用 is 判断而不是 `as String?`：参数不是字符串时不该抛异常
+        final title = args['localVideoTitle'];
+        initLocalVideo(localPath, title is String ? title : null);
       } else {
         initFileSource(args['entry']);
       }
