@@ -20,6 +20,7 @@ import 'package:PiliPlus/models_new/video/video_detail/staff.dart';
 import 'package:PiliPlus/models_new/video/video_detail/stat.dart';
 import 'package:PiliPlus/models_new/video/video_tag/data.dart';
 import 'package:PiliPlus/pages/mine/controller.dart';
+import 'package:PiliPlus/mod/speed/speed_buttons.dart';
 import 'package:PiliPlus/pages/search/widgets/search_text.dart';
 import 'package:PiliPlus/pages/video/controller.dart';
 import 'package:PiliPlus/pages/video/introduction/ugc/controller.dart';
@@ -736,6 +737,13 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
                 },
               ),
             ),
+          ),
+          // [MOD-HOOK:speed-buttons] UP 主名字与关注按钮之间的快捷倍速按钮
+          ...ModSpeedHooks.upRowItems(
+            controller: videoDetailCtr.plPlayerController,
+            isLandscape: !isPortrait,
+            upMid: mid,
+            upName: videoDetail.owner?.name,
           ),
           followButton(context),
         ],

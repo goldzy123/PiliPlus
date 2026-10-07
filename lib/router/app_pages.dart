@@ -55,11 +55,12 @@ import 'package:PiliPlus/pages/search_trending/view.dart';
 import 'package:PiliPlus/pages/setting/pages/bar_set.dart';
 import 'package:PiliPlus/pages/setting/pages/color_select.dart';
 import 'package:PiliPlus/pages/setting/pages/display_mode.dart';
-import 'package:PiliPlus/pages/setting/favorite_settings_page.dart';
+import 'package:PiliPlus/mod/settings/favorite_settings_page.dart';
+import 'package:PiliPlus/mod/settings_sync/view.dart';
 import 'package:PiliPlus/pages/setting/pages/font_setting.dart';
 import 'package:PiliPlus/pages/setting/pages/logs.dart';
 import 'package:PiliPlus/pages/setting/pages/play_speed_set.dart';
-import 'package:PiliPlus/pages/setting/pages/speed_auto_set.dart';
+import 'package:PiliPlus/mod/speed/speed_auto_set.dart';
 import 'package:PiliPlus/pages/setting/view.dart';
 import 'package:PiliPlus/pages/settings_search/view.dart';
 import 'package:PiliPlus/pages/space_setting/view.dart';
@@ -126,6 +127,8 @@ class Routes {
       name: '/settingFavorites',
       page: () => const FavoriteSettingsPage(),
     ),
+    // [MOD-HOOK:settings-sync]
+    GetPage(name: '/settingsSync', page: () => const SettingsSyncPage()),
     // 收藏搜索
     GetPage(name: '/favSearch', page: () => const FavSearchPage()),
     GetPage(name: '/historySearch', page: () => const HistorySearchPage()),

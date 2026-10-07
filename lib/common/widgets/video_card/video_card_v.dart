@@ -239,20 +239,21 @@ class VideoCardV extends StatelessWidget {
             value: videoItem.stat.danmu,
           ),
         ],
-        if (videoItem is RcmdVideoItemModel) ...[
+        // [MOD-HOOK:card-date] 只要有发布日期就显示。
+        // 上游原来判断 `videoItem is RcmdVideoItemModel`，只覆盖 web 来源的推荐，
+        // app 来源（RcmdVideoItemAppModel）永远不显示，所以看起来"有的有有的没有"。
+        if (videoItem.pubdate case final pubdate? when pubdate > 0) ...[
           const Spacer(),
-          Text.rich(
+          Text(
+            DateFormatUtils.dateFormat(
+              pubdate,
+              short: shortFormat,
+              long: longFormat,
+            ),
             maxLines: 1,
-            TextSpan(
-              style: TextStyle(
-                fontSize: theme.textTheme.labelSmall!.fontSize,
-                color: theme.colorScheme.outline.withValues(alpha: 0.8),
-              ),
-              text: DateFormatUtils.dateFormat(
-                videoItem.pubdate,
-                short: shortFormat,
-                long: longFormat,
-              ),
+            style: TextStyle(
+              fontSize: theme.textTheme.labelSmall!.fontSize,
+              color: theme.colorScheme.outline.withValues(alpha: 0.8),
             ),
           ),
           const SizedBox(width: 2),

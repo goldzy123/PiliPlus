@@ -51,7 +51,7 @@ import 'package:PiliPlus/plugin/pl_player/models/data_source.dart';
 import 'package:PiliPlus/plugin/pl_player/models/heart_beat_type.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
-import 'package:PiliPlus/services/playback_speed_service.dart';
+import 'package:PiliPlus/mod/speed/playback_speed_service.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/connectivity_utils.dart';
 import 'package:PiliPlus/utils/extension/context_ext.dart';
@@ -103,6 +103,10 @@ class VideoDetailController extends GetxController
   late bool isPlayAll;
   late SourceType sourceType;
   late BiliDownloadEntryInfo entry;
+  // [MOD-HOOK:local-video] 任意本地视频文件（不套 B 站下载目录结构）
+  String? localVideoPath;
+  String? localVideoTitle;
+  bool get isLocalVideo => localVideoPath != null;
   @override
   late bool isFileSource;
   late bool _mediaDesc = false;
@@ -328,13 +332,19 @@ class VideoDetailController extends GetxController
   late final watchProgress = GStorage.watchProgress;
   void cacheLocalProgress() {
     if (plPlayerController.playerStatus.isCompleted) {
-      watchProgress.put(cid.value.toString(), entry.totalTimeMilli);
+      // [MOD-HOOK:local-video] 本地视频没有 entry，用播放器上报的总时长
+      watchProgress.put(
+        cid.value.toString(),
+        isLocalVideo ? (data.timeLength ?? 0) : entry.totalTimeMilli,
+      );
     } else if (playedTime case final playedTime?) {
       watchProgress.put(cid.value.toString(), playedTime.inMilliseconds);
     }
   }
 
   void _initLocalSkipIfNeeded() {
+    // [MOD-HOOK:local-video] 本地视频没有 B 站分段/空降数据
+    if (isLocalVideo) return;
     if (plPlayerController.enableBlock) {
       resetBlock();
       if (entry.segments case final list? when list.isNotEmpty) {
@@ -365,6 +375,29 @@ class VideoDetailController extends GetxController
     _setVideoHeight();
   }
 
+  /// [MOD] 播放任意本地视频文件。
+  void initLocalVideo(String path, [String? title]) {
+    localVideoPath = path;
+    localVideoTitle = title?.isNotEmpty == true
+        ? title
+        : path.split('/').last;
+    // 本地视频没有 B 站画质概念，占位用 1080P（画质按钮对本地视频无意义）
+    firstVideo = VideoItem(
+      id: VideoQuality.high1080.code,
+      quality: VideoQuality.high1080,
+      width: 1,
+      height: 1,
+    );
+    // 复用下载页的进度记忆键（cid 对本地视频是文件哈希）
+    if (watchProgress.get(cid.value.toString()) case final int progress?) {
+      defaultST = Duration(milliseconds: progress);
+    } else {
+      defaultST = Duration.zero;
+    }
+    data = PlayUrlModel();
+    _setVideoHeight();
+  }
+
   @override
   void onInit() {
     super.onInit();
@@ -392,7 +425,12 @@ class VideoDetailController extends GetxController
     isFileSource = sourceType == SourceType.file;
     isPlayAll = sourceType != SourceType.normal && !isFileSource;
     if (isFileSource) {
-      initFileSource(args['entry']);
+      // [MOD-HOOK:local-video] 本地视频走独立分支，不依赖 B 站下载目录结构
+      if (args['localVideoPath'] case final String localPath) {
+        initLocalVideo(localPath, args['localVideoTitle'] as String?);
+      } else {
+        initFileSource(args['entry']);
+      }
     } else if (isPlayAll) {
       watchLaterTitle = args['favTitle'];
       _mediaDesc = args['desc'];
@@ -769,12 +807,15 @@ class VideoDetailController extends GetxController
 
     await plPlayerController.setDataSource(
       isFileSource
-          ? FileSource(
-              dir: args['dirPath'],
-              typeTag: entry.typeTag!,
-              isMp4: entry.mediaType == 1,
-              hasDashAudio: entry.hasDashAudio,
-            )
+          // [MOD-HOOK:local-video] 本地视频直接用文件路径
+          ? (isLocalVideo
+                ? FileSource.local(localVideoPath!)
+                : FileSource(
+                    dir: args['dirPath'],
+                    typeTag: entry.typeTag!,
+                    isMp4: entry.mediaType == 1,
+                    hasDashAudio: entry.hasDashAudio,
+                  ))
           : NetworkSource(
               videoSource: videoUrl!,
               audioSource: audioUrl,

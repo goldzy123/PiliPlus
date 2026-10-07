@@ -50,6 +50,13 @@ class LocalIntroController extends CommonIntroController {
   void onInit() {
     super.onInit();
     videoDetail.value.title = videoDetailCtr.args['title'];
+    // [MOD-HOOK:local-video] 任意本地视频（不是 B 站下载）没有下载列表，
+    // 跳过全部下载相关逻辑，否则 Get.find<DownloadController>() 会抛异常。
+    if (videoDetailCtr.isLocalVideo) {
+      this.list.value = const [];
+      this.index.value = -1;
+      return;
+    }
     final controller = Get.find<DownloadController>();
     final list = <BiliDownloadEntryInfo>[];
     for (final seaon in controller.seasons) {
@@ -128,6 +135,8 @@ class LocalIntroController extends CommonIntroController {
     int index, {
     BiliDownloadEntryInfo? entry,
   }) {
+    // [MOD-HOOK:local-video] 本地视频列表为空，没有可切换的下一集
+    if (list.isEmpty) return;
     entry ??= list[index];
     videoDetailCtr
       ..onReset()
