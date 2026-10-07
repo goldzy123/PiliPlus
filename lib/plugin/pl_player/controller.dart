@@ -18,6 +18,7 @@ import 'package:PiliPlus/models/video/play/url.dart';
 import 'package:PiliPlus/models_new/video/video_shot/data.dart';
 import 'package:PiliPlus/pages/danmaku/danmaku_model.dart';
 import 'package:PiliPlus/pages/sponsor_block/block_mixin.dart';
+import 'package:PiliPlus/plugin/pl_player/models/audio_output_type.dart';
 import 'package:PiliPlus/plugin/pl_player/models/data_source.dart';
 import 'package:PiliPlus/plugin/pl_player/models/data_status.dart';
 import 'package:PiliPlus/plugin/pl_player/models/double_tap_type.dart';
@@ -160,6 +161,13 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
   Timer? _timer;
   StreamSubscription? _subForSeek;
+
+  /// seek 卡死自愈看门狗（详见 [_armSeekWatchdog]）
+  Timer? _seekWatchdog;
+  int _seekStallRetry = 0;
+
+  /// 由 [VideoDetailController] 注入：seek 卡死且重试无效时重新取流并回到该位置
+  Future<void> Function(Duration position)? onSeekStalled;
 
   Box setting = GStorage.setting;
 
@@ -855,7 +863,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     assert(_videoPlayerController == null);
     final opt = {
       'video-sync': Pref.videoSync,
-      if (Platform.isAndroid) 'ao': Pref.audioOutput,
+      if (Platform.isAndroid) 'ao': AudioOutput.resolveMpvAo(Pref.audioOutput),
       'volume':
           (PlatformUtils.isMobile ? Pref.playerVolume : volume.value * 100)
               .toString(),
@@ -1203,9 +1211,55 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     try {
       await _videoPlayerController?.seek(position);
       _updateIOSPip(position);
+      // 新的 seek 视为新一轮，重置上一次的重试计数
+      _seekStallRetry = 0;
+      _armSeekWatchdog(position);
     } catch (e) {
       if (kDebugMode) debugPrint('seek failed: $e');
     }
+  }
+
+  /// seek 卡死自愈。
+  ///
+  /// 某些音频后端（尤其 AAudio，见 [AudioOutput.resolveMpvAo]）在 seek 之后
+  /// 会让 mpv 的时钟卡住：状态仍是 playing、声音也还在播，但进度不再前进、
+  /// 画面冻住。这里做兜底：
+  ///   1. seek 后若干秒内进度仍停在目标附近 → 重试一次 seek；
+  ///   2. 仍然卡住 → 回调 [onSeekStalled]，由上层重新取流并回到该位置。
+  void _armSeekWatchdog(Duration target) {
+    _seekWatchdog?.cancel();
+    _seekWatchdog = Timer(const Duration(seconds: 4), () async {
+      _seekWatchdog = null;
+      if (_instance == null ||
+          _videoPlayerController == null ||
+          isSeeking.value ||
+          !playerStatus.isPlaying) {
+        return;
+      }
+      // 进度已经走开（>2s）说明 seek 正常，重置重试计数
+      if ((position.value - target.inSeconds).abs() > 2) {
+        _seekStallRetry = 0;
+        return;
+      }
+      if (_seekStallRetry == 0) {
+        _seekStallRetry = 1;
+        try {
+          await _videoPlayerController?.seek(target);
+        } catch (_) {}
+        _armSeekWatchdog(target);
+      } else {
+        _seekStallRetry = 0;
+        try {
+          await onSeekStalled?.call(target);
+        } catch (_) {}
+      }
+    });
+  }
+
+  void _cancelSeekWatchdog() {
+    _seekWatchdog?.cancel();
+    _seekWatchdog = null;
+    _seekStallRetry = 0;
   }
 
   /// 跳转至指定位置
@@ -1693,6 +1747,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     resetScreenRotation();
     cancelLongPressTimer();
     _cancelSubForSeek();
+    _cancelSeekWatchdog();
     if (!_isCloseAll && _playerCount > 1) {
       _playerCount -= 1;
       _heartDuration = 0;

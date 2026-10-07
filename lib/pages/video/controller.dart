@@ -404,6 +404,16 @@ class VideoDetailController extends GetxController
       vsync: this,
       initialIndex: Pref.defaultShowComment ? 1 : 0,
     );
+
+    // seek 卡死自愈的最后一步：重新取流并回到目标位置。
+    // 播放器侧的看门狗（PlPlayerController._armSeekWatchdog）在重试 seek
+    // 仍无法让进度前进时回调这里。
+    plPlayerController.onSeekStalled = (stalledAt) async {
+      if (isClosed) return;
+      playedTime = stalledAt;
+      _autoPlay.value = true;
+      await queryVideoUrl(fromReset: true);
+    };
   }
 
   Future<void> getMediaList({
