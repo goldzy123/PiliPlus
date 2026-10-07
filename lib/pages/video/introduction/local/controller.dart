@@ -53,7 +53,7 @@ class LocalIntroController extends CommonIntroController {
     // [MOD-HOOK:local-video] 任意本地视频（不是 B 站下载）没有下载列表，
     // 跳过全部下载相关逻辑，否则 Get.find<DownloadController>() 会抛异常。
     if (videoDetailCtr.isLocalVideo) {
-      this.list.value = const [];
+      this.list.value = <BiliDownloadEntryInfo>[];
       this.index.value = -1;
       return;
     }

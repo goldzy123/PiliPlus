@@ -739,9 +739,8 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
             ),
           ),
           // [MOD-HOOK:speed-buttons] UP 主名字与关注按钮之间的快捷倍速按钮
-          ...ModSpeedHooks.upRowItems(
+          ModSpeedHooks.upRowItems(
             controller: videoDetailCtr.plPlayerController,
-            isLandscape: !isPortrait,
             upMid: mid,
             upName: videoDetail.owner?.name,
           ),

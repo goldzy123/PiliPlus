@@ -5,11 +5,11 @@ import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/stat/stat.dart';
 import 'package:PiliPlus/common/widgets/video_popup_menu.dart';
 import 'package:PiliPlus/http/search.dart';
+import 'package:PiliPlus/mod/card_date/card_date.dart';
 import 'package:PiliPlus/models/home/rcmd/result.dart';
 import 'package:PiliPlus/models/model_rec_video_item.dart';
 import 'package:PiliPlus/models_new/video/video_detail/dimension.dart';
 import 'package:PiliPlus/utils/app_scheme.dart';
-import 'package:PiliPlus/utils/date_utils.dart';
 import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/extension/dimension_ext.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
@@ -239,25 +239,10 @@ class VideoCardV extends StatelessWidget {
             value: videoItem.stat.danmu,
           ),
         ],
-        // [MOD-HOOK:card-date] 只要有发布日期就显示。
-        // 上游原来判断 `videoItem is RcmdVideoItemModel`，只覆盖 web 来源的推荐，
-        // app 来源（RcmdVideoItemAppModel）永远不显示，所以看起来"有的有有的没有"。
-        if (videoItem.pubdate case final pubdate? when pubdate > 0) ...[
-          const Spacer(),
-          Text(
-            DateFormatUtils.dateFormat(
-              pubdate,
-              short: shortFormat,
-              long: longFormat,
-            ),
-            maxLines: 1,
-            style: TextStyle(
-              fontSize: theme.textTheme.labelSmall!.fontSize,
-              color: theme.colorScheme.outline.withValues(alpha: 0.8),
-            ),
-          ),
-          const SizedBox(width: 2),
-        ],
+        // [MOD-HOOK:card-date] 强制显示发布日期。
+        // 上游原来只在 `videoItem is RcmdVideoItemModel`（web 来源推荐）时显示，
+        // app 来源的推荐接口根本不返回日期 —— 见 lib/mod/card_date/card_date.dart
+        ...ModCardDate.statTrailing(theme: theme, item: videoItem),
       ],
     );
   }

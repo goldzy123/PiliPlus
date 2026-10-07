@@ -2,10 +2,12 @@ import 'dart:io';
 
 import 'package:PiliPlus/models/common/video/source_type.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
+import 'package:PiliPlus/utils/path_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:get/get.dart';
 import 'package:hive_ce/hive.dart';
+import 'package:path/path.dart' as path;
 
 /// 一条本地视频记录。
 class LocalVideoItem {
@@ -43,7 +45,9 @@ abstract final class LocalVideoStore {
 
   static List<LocalVideoItem> load() {
     final raw = _box.get(boxKey);
-    if (raw is! List) return const [];
+    // 注意：必须返回可变列表，const [] 赋给 RxList 后 addAll 会抛
+    // UnmodifiableListMixin（踩过一次）
+    if (raw is! List) return <LocalVideoItem>[];
     return raw
         .whereType<Map>()
         .map((e) => LocalVideoItem.fromJson(Map<String, dynamic>.from(e)))
@@ -65,6 +69,28 @@ abstract final class LocalVideoStore {
     }
     return h;
   }
+
+  /// 把插件给的临时文件挪进 app 私有目录。
+  ///
+  /// Android 上 file_picker 会把选中的文件复制到 `cache/file_picker/xxx`，
+  /// 而 cache 随时可能被系统清掉（清了记录就失效）。同一文件系统内 rename
+  /// 不搬数据，所以这里几乎是零成本。
+  static Future<String> persist(String srcPath, String name) async {
+    try {
+      if (!File(srcPath).existsSync()) return srcPath;
+      final dir = Directory(path.join(appSupportDirPath, 'localVideos'));
+      if (!dir.existsSync()) await dir.create(recursive: true);
+      final target = path.join(
+        dir.path,
+        '${DateTime.now().millisecondsSinceEpoch}_$name',
+      );
+      await File(srcPath).rename(target);
+      return target;
+    } catch (_) {
+      // 跨文件系统等异常：保持原路径，至少本次能用
+      return srcPath;
+    }
+  }
 }
 
 class LocalVideoController extends GetxController {
@@ -85,11 +111,18 @@ class LocalVideoController extends GetxController {
     if (res.isEmpty) return 0;
     final exist = list.map((e) => e.path).toSet();
     final now = DateTime.now().millisecondsSinceEpoch;
-    final added = <LocalVideoItem>[
-      for (final f in res)
-        if (f.path case final p? when !exist.contains(p))
-          LocalVideoItem(path: p, name: f.name, addedAt: now),
-    ];
+    final added = <LocalVideoItem>[];
+    for (final f in res) {
+      final p = f.path;
+      if (p == null || p.isEmpty || exist.contains(p)) continue;
+      added.add(
+        LocalVideoItem(
+          path: await LocalVideoStore.persist(p, f.name),
+          name: f.name,
+          addedAt: now,
+        ),
+      );
+    }
     if (added.isEmpty) return 0;
     list.addAll(added);
     await LocalVideoStore.save(list);

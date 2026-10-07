@@ -5,6 +5,15 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
+/// 倍速按钮放在哪儿。
+enum ModSpeedPlacement {
+  /// 播放器控制条那一行（全屏 / 横屏）
+  playerRow,
+
+  /// 视频详情页 UP 名与关注按钮之间（竖屏）
+  upRow,
+}
+
 /// 快捷倍速按钮（mod）。
 ///
 /// 两个按钮，点按 = 把当前视频切到该倍速；长按 = 把该倍速设成当前 UP 的
@@ -17,37 +26,54 @@ import 'package:material_ui/material_ui.dart';
 /// | 当前正在使用的倍速 | 胶囊描边 | 主题色描边 | 对勾 |
 /// | 普通 | 胶囊描边 | 弱化描边 | 无 |
 ///
-/// 竖屏时放在视频详情页 UP 主名字与关注按钮之间；全屏/横屏时并入播放器
-/// 控制条同一行（不再单独占一行）。
+/// 位置：竖屏放 UP 那一行；全屏/横屏并入播放器控制条同一行（不再单独占行）。
+/// 注意判断依据是**全屏状态 + 屏幕方向**，不能用播放器里的 `isLandscape`
+/// —— 那个是"视频本身是横的"，竖屏看横版视频时会误判，导致两处都出现。
 class ModSpeedButtons extends StatelessWidget {
   const ModSpeedButtons({
     super.key,
     required this.controller,
+    required this.placement,
     this.upMid,
     this.upName,
-    this.compact = false,
   });
 
   final PlPlayerController controller;
+  final ModSpeedPlacement placement;
   final int? upMid;
   final String? upName;
 
-  /// 紧凑模式：用在播放器控制条里，尺寸更小。
-  final bool compact;
+  bool get _compact => placement == ModSpeedPlacement.playerRow;
 
   @override
   Widget build(BuildContext context) {
+    // 只看全屏状态：全屏 → 控制条那一行；非全屏 → UP 名与关注按钮之间。
+    // 不要掺屏幕方向或播放器的 isLandscape：横屏非全屏时播放器和 UP 行同时存在，
+    // 按方向判断会两处都出现；isLandscape 还是"视频本身是横的"，更容易误判。
     return Obx(() {
+      final full = controller.isFullScreen.value;
+      final show = switch (placement) {
+        ModSpeedPlacement.playerRow => full,
+        ModSpeedPlacement.upRow => !full,
+      };
+      if (!show) return const SizedBox.shrink();
+
       final forced = upMid == null
           ? null
           : PlaybackSpeedService.upSpeed(upMid!);
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _pill(context, 0, forced),
-          SizedBox(width: compact ? 6 : 8),
-          _pill(context, 1, forced),
-        ],
+      return Padding(
+        padding: EdgeInsets.only(
+          right: _compact ? 8 : 6,
+          top: _compact ? 0 : 2,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _pill(context, 0, forced),
+            SizedBox(width: _compact ? 6 : 8),
+            _pill(context, 1, forced),
+          ],
+        ),
       );
     });
   }
@@ -75,15 +101,18 @@ class ModSpeedButtons extends StatelessWidget {
       border = scheme.primary;
       icon = Icons.check;
     } else {
+      // 播放器控制条压在视频画面上，普通态要用白色系才看得清
       bg = Colors.transparent;
-      fg = scheme.outline;
-      border = scheme.outline.withValues(alpha: 0.55);
+      fg = _compact ? Colors.white.withValues(alpha: 0.9) : scheme.outline;
+      border = _compact
+          ? Colors.white.withValues(alpha: 0.65)
+          : scheme.outline.withValues(alpha: 0.55);
       icon = null;
     }
 
     final text = Text(
       '${_fmt(speed)}X',
-      style: TextStyle(fontSize: compact ? 11 : 12, color: fg),
+      style: TextStyle(fontSize: _compact ? 11 : 12, color: fg),
     );
 
     return Tooltip(
@@ -98,8 +127,8 @@ class ModSpeedButtons extends StatelessWidget {
         },
         onLongPress: () => _onLongPress(index, speed, forced),
         child: Container(
-          height: compact ? 22 : 26,
-          padding: EdgeInsets.symmetric(horizontal: compact ? 7 : 9),
+          height: _compact ? 22 : 26,
+          padding: EdgeInsets.symmetric(horizontal: _compact ? 7 : 9),
           decoration: BoxDecoration(
             color: bg,
             border: Border.all(color: border, width: isUpForced ? 0 : 1),
@@ -110,7 +139,7 @@ class ModSpeedButtons extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (icon != null) ...[
-                Icon(icon, size: compact ? 11 : 12, color: fg),
+                Icon(icon, size: _compact ? 11 : 12, color: fg),
                 const SizedBox(width: 3),
               ],
               text,
@@ -144,42 +173,31 @@ class ModSpeedButtons extends StatelessWidget {
 
 /// 对官方文件的 hook 封装，见 `lib/mod/README.md`。
 abstract final class ModSpeedHooks {
-  /// 播放器控制条同一行内的倍速按钮。
-  /// 只在全屏或横屏时返回内容——竖屏时按钮在 UP 主那一行。
-  static List<Widget> playerRowItems({
+  /// 播放器控制条同一行里的倍速按钮（全屏才显示）。
+  static Widget playerRowItems({
     required PlPlayerController controller,
-    required bool isFullScreen,
-    required bool isLandscape,
     int? upMid,
     String? upName,
   }) {
-    if (!isFullScreen && !isLandscape) return const [];
-    return [
-      ModSpeedButtons(
-        controller: controller,
-        upMid: upMid,
-        upName: upName,
-        compact: true,
-      ),
-      const SizedBox(width: 8),
-    ];
+    return ModSpeedButtons(
+      controller: controller,
+      placement: ModSpeedPlacement.playerRow,
+      upMid: upMid,
+      upName: upName,
+    );
   }
 
-  /// 视频详情页 UP 主名字与关注按钮之间的倍速按钮。
-  static List<Widget> upRowItems({
+  /// 视频详情页 UP 名与关注按钮之间的倍速按钮（非全屏才显示）。
+  static Widget upRowItems({
     required PlPlayerController controller,
-    required bool isLandscape,
     int? upMid,
     String? upName,
   }) {
-    if (isLandscape) return const [];
-    return [
-      ModSpeedButtons(
-        controller: controller,
-        upMid: upMid,
-        upName: upName,
-      ),
-      const SizedBox(width: 6),
-    ];
+    return ModSpeedButtons(
+      controller: controller,
+      placement: ModSpeedPlacement.upRow,
+      upMid: upMid,
+      upName: upName,
+    );
   }
 }

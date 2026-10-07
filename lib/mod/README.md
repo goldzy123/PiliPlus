@@ -6,7 +6,8 @@
 
 | 路径 | 作用 |
 | --- | --- |
-| `speed/` | 快捷倍速：`speed_buttons.dart`（两个倍速按钮，点按切倍速 / 长按设 UP 强制倍速）、`playback_speed_service.dart`（按视频/UP/规则/AI 记忆倍速）、`speed_auto_set.dart`（「智能倍速」设置页） |
+| `speed/` | 快捷倍速：`speed_buttons.dart`（两个倍速按钮，点按切倍速 / 长按设 UP 强制倍速；**按 `isFullScreen` 决定放控制条还是 UP 行**）、`playback_speed_service.dart`（按视频/UP/规则/AI 记忆倍速）、`speed_auto_set.dart`（「智能倍速」设置页，含两个按钮取值） |
+| `card_date/` | 卡片发布日期：`card_date.dart`。app 端推荐接口**完全不返回日期**，这里按 bvid 补拉 `/x/web-interface/view` 并长期缓存 |
 | `settings/` | 设置项收藏：`setting_favorites.dart`、`setting_refs.dart`、`favorite_settings_page.dart` |
 | `lan_sync/` | 局域网接力：`lan_sync_service.dart`、`models.dart`、`panel.dart` |
 | `local_video/` | 本地视频 tab：`controller.dart`（选片/持久化/打开）、`view.dart` |
@@ -24,10 +25,10 @@
 
 | hook id | 文件 | 行 | 做什么 |
 | --- | --- | --- | --- |
-| `speed-buttons` | `plugin/pl_player/view/view.dart` | ~946 | 全屏/横屏时把倍速按钮并进控制条同一行 |
-| `speed-buttons` | `pages/video/introduction/ugc/view.dart` | ~741 | 竖屏时把倍速按钮插在 UP 名与关注按钮之间 |
-| `card-date` | `common/widgets/video_card/video_card_v.dart` | ~242 | 有 pubdate 就显示发布日期（原来只判断 web 来源的模型） |
-| `card-date` | `models/home/rcmd/result.dart` | ~54 | 解析 app 接口的 pubdate（原来根本没解析） |
+| `speed-buttons` | `plugin/pl_player/view/view.dart` | ~946 | 全屏时把倍速按钮并进控制条同一行（一行调用） |
+| `speed-buttons` | `pages/video/introduction/ugc/view.dart` | ~741 | 非全屏时把倍速按钮插在 UP 名与关注按钮之间（一行调用） |
+| `card-date` | `common/widgets/video_card/video_card_v.dart` | ~242 | 尾部整块交给 `ModCardDate.statTrailing`（一行） |
+| `card-date` | `models/home/rcmd/result.dart` | ~54 | 顺手解析 app 接口的 pubdate（现在接口没有，留作兼容） |
 | `local-video` | `models/common/nav_bar_config.dart` | ~28 | 新增 `NavigationBarType.local`（**必须追加在枚举末尾**） |
 | `local-video` | `pages/video/controller.dart` | 106 / 335 / 346 / 428 / 810 | 本地视频字段、进度、跳过分段、onInit 分支、FileSource.local |
 | `local-video` | `plugin/pl_player/models/data_source.dart` | ~41 | `FileSource.local(path)` 命名构造 |

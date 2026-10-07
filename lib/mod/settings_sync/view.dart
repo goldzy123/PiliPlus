@@ -179,7 +179,7 @@ class _SettingsSyncPageState extends State<SettingsSyncPage> {
           Obx(
             () => SyncConfig.enabled
                 ? OutlinedButton.icon(
-                    onPressed: () async {
+                    onPressed: () {
                       _svc.stop();
                       setState(() {});
                       SmartDialog.showToast('已关闭自动同步');
