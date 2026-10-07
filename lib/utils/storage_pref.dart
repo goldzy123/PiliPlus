@@ -869,11 +869,19 @@ abstract final class Pref {
   static double get longPressSpeedDefault =>
       _video.get(VideoBoxKey.longPressSpeedDefault, defaultValue: 3.0);
 
+  // [MOD-HOOK:speed-buttons] 容错：Hive 里若存成 int（同步写回也会），
+  // 直接当 double 返回会在读取处抛类型错误
+  static double _numOr(Object? v, double fallback) {
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v) ?? fallback;
+    return fallback;
+  }
+
   static double get quickSpeed1 =>
-      _video.get(VideoBoxKey.quickSpeed1, defaultValue: 1.5);
+      _numOr(_video.get(VideoBoxKey.quickSpeed1), 1.5);
 
   static double get quickSpeed2 =>
-      _video.get(VideoBoxKey.quickSpeed2, defaultValue: 2.0);
+      _numOr(_video.get(VideoBoxKey.quickSpeed2), 2.0);
 
   static bool get enableSpeedAi =>
       _setting.get(SettingBoxKey.enableSpeedAi, defaultValue: false);

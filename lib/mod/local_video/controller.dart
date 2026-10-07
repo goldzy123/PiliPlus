@@ -93,6 +93,32 @@ abstract final class LocalVideoStore {
   }
 }
 
+/// 选片结果，用来给用户明确反馈（而不是静默什么都不发生）。
+class LocalVideoPickResult {
+  const LocalVideoPickResult({
+    this.added = 0,
+    this.duplicated = 0,
+    this.failed = 0,
+  });
+
+  final int added;
+
+  /// 已经在列表里的
+  final int duplicated;
+
+  /// 拿不到本地路径的（理论上 Android 上不会发生：插件一定会复制到 cache）
+  final int failed;
+
+  bool get isEmpty => added == 0 && duplicated == 0 && failed == 0;
+
+  String get message {
+    if (added > 0) return '已添加 $added 个视频';
+    if (duplicated > 0) return '这些视频已经在列表里了';
+    if (failed > 0) return '有 $failed 个文件读不到路径，添加失败';
+    return '';
+  }
+}
+
 class LocalVideoController extends GetxController {
   final list = <LocalVideoItem>[].obs;
 
@@ -103,30 +129,41 @@ class LocalVideoController extends GetxController {
   }
 
   /// 用系统文件选择器挑视频（可多选）。
-  Future<int> pick() async {
+  Future<LocalVideoPickResult> pick() async {
     final res = await FilePicker.pickFiles(
       dialogTitle: '选择视频',
       type: FileType.video,
     );
-    if (res.isEmpty) return 0;
+    if (res.isEmpty) return const LocalVideoPickResult();
     final exist = list.map((e) => e.path).toSet();
     final now = DateTime.now().millisecondsSinceEpoch;
     final added = <LocalVideoItem>[];
+    var duplicated = 0;
+    var failed = 0;
     for (final f in res) {
       final p = f.path;
-      if (p == null || p.isEmpty || exist.contains(p)) continue;
+      if (p == null || p.isEmpty) {
+        failed++;
+        continue;
+      }
+      final saved = await LocalVideoStore.persist(p, f.name);
+      if (exist.contains(p) || exist.contains(saved)) {
+        duplicated++;
+        continue;
+      }
       added.add(
-        LocalVideoItem(
-          path: await LocalVideoStore.persist(p, f.name),
-          name: f.name,
-          addedAt: now,
-        ),
+        LocalVideoItem(path: saved, name: f.name, addedAt: now),
       );
     }
-    if (added.isEmpty) return 0;
-    list.addAll(added);
-    await LocalVideoStore.save(list);
-    return added.length;
+    if (added.isNotEmpty) {
+      list.addAll(added);
+      await LocalVideoStore.save(list);
+    }
+    return LocalVideoPickResult(
+      added: added.length,
+      duplicated: duplicated,
+      failed: failed,
+    );
   }
 
   Future<void> remove(LocalVideoItem item) async {

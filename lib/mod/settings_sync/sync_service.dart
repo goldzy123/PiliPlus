@@ -202,7 +202,11 @@ class SettingsSyncService extends GetxController {
         for (final e in incoming.entries) {
           final k = e.key.toString();
           if (!_syncable(k)) continue;
-          patch[k] = e.value;
+          var v = e.value;
+          // JSON 往返会把 2.0 变成 int 2；本地原本是 double 的话要还原，
+          // 否则下游 `as double` 之类的代码会抛类型错误（踩过）。
+          if (v is int && entry.value.get(k) is double) v = v.toDouble();
+          patch[k] = v;
         }
         if (patch.isEmpty) continue;
         await entry.value.putAll(patch);
