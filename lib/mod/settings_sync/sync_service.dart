@@ -66,10 +66,17 @@ const _excludedFragments = <String>[
   'login',
   'path',
   'dir',
+  'deviceid', // 局域网接力的本机 ID，每台设备不同
 ];
+
+/// 明确排除的整键（含设备本地状态）
+const _excludedKeys = <String>{
+  'mod_local_videos', // 本地视频列表存的是本机文件路径
+};
 
 bool _syncable(String key) {
   final lower = key.toLowerCase();
+  if (_excludedKeys.contains(key)) return false;
   for (final f in _excludedFragments) {
     if (lower.contains(f)) return false;
   }

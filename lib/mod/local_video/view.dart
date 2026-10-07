@@ -74,7 +74,7 @@ class _LocalVideoPageState extends State<LocalVideoPage>
               ),
               subtitle: Text(
                 '${item.path}\n${_size(item.path)}',
-                maxLines: 2,
+                maxLines: 3,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 11,

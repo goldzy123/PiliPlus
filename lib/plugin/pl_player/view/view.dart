@@ -945,19 +945,16 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     ];
     // [MOD-HOOK:speed-buttons] 全屏/横屏时把快捷倍速并入控制条同一行，
     // 竖屏时按钮在视频详情页 UP 主那一行（见 lib/mod/speed/speed_buttons.dart）
-    final modSpeedItems = ModSpeedHooks.playerRowItems(
-      controller: plPlayerController,
-      isFullScreen: isFullScreen,
-      isLandscape: isLandscape,
-      upMid: videoDetailController.currentUpMid,
-      upName: videoDetailController.currentUpName,
-    );
     return PlayerBar(
       left: Row(
         mainAxisSize: .min,
         children: [
           ...userSpecifyItemLeft.map(progressWidget),
-          ...modSpeedItems,
+          ModSpeedHooks.playerRowItems(
+            controller: plPlayerController,
+            upMid: videoDetailController.currentUpMid,
+            upName: videoDetailController.currentUpName,
+          ),
         ],
       ),
       right: Row(
