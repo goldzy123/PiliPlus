@@ -15,7 +15,8 @@ import 'package:PiliPlus/router/app_pages.dart';
 import 'package:PiliPlus/services/account_service.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/services/logger.dart';
-import 'package:PiliPlus/services/lan_sync/lan_sync_service.dart';
+import 'package:PiliPlus/mod/lan_sync/lan_sync_service.dart';
+import 'package:PiliPlus/mod/settings_sync/sync_service.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/utils/cache_manager.dart';
 import 'package:PiliPlus/utils/calc_window_position.dart';
@@ -139,6 +140,8 @@ void main() async {
   Request.setCookie();
   RequestUtils.syncHistoryStatus();
   unawaited(LanSyncService.instance.start());
+  // [MOD-HOOK:settings-sync] 初始化配置同步（未启用时什么都不做）
+  SettingsSyncService.to;
 
   SmartDialog.config.toast = SmartConfigToast(displayType: .onlyRefresh);
 

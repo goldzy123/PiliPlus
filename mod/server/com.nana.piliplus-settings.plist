@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  PiliPlus 设置同步服务（launchd 常驻）
+
+  安装：
+    cp mod/server/com.nana.piliplus-settings.plist ~/Library/LaunchAgents/
+    launchctl bootout   gui/$(id -u)/com.nana.piliplus-settings 2>/dev/null || true
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.nana.piliplus-settings.plist
+  查看：
+    launchctl print gui/$(id -u)/com.nana.piliplus-settings | head -20
+    tail -f ~/.piliplus-settings/server.log
+  卸载：
+    launchctl bootout gui/$(id -u)/com.nana.piliplus-settings
+
+  注意：下面的绝对路径是按当前这台 Mac 写的（脚本在 PiliPlus 仓库里）。
+  如果仓库挪了位置，改 ProgramArguments 的第二个参数。
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nana.piliplus-settings</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/node</string>
+        <string>/Users/zhaonanwang/nana/ai/dsh/piliplus/mod/server/piliplus-settings-server.mjs</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PORT</key>
+        <string>8720</string>
+        <key>TOKEN</key>
+        <string></string>
+        <key>DATA_DIR</key>
+        <string>/Users/zhaonanwang/.piliplus-settings</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/zhaonanwang/.piliplus-settings/server.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/zhaonanwang/.piliplus-settings/server.err.log</string>
+</dict>
+</plist>

@@ -37,4 +37,10 @@ class FileSource extends DataSource {
              ? null
              : path.join(dir, typeTag, PathUtils.audioNameType2),
        );
+
+  /// [MOD] 任意本地视频文件（单文件、音视频同轨），不套 B 站下载目录结构。
+  FileSource.local(String filePath)
+    : dir = filePath,
+      isMp4 = true,
+      super(videoSource: filePath, audioSource: null);
 }

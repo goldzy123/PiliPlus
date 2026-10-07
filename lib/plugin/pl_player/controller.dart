@@ -31,7 +31,7 @@ import 'package:PiliPlus/plugin/pl_player/models/video_fit_type.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/danmaku_options.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart';
 import 'package:PiliPlus/services/service_locator.dart';
-import 'package:PiliPlus/services/playback_speed_service.dart';
+import 'package:PiliPlus/mod/speed/playback_speed_service.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/android/android_helper.dart';
 import 'package:PiliPlus/utils/android/bindings.g.dart';

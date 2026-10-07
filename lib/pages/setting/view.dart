@@ -185,6 +185,13 @@ class _SettingPageState extends State<SettingPage> {
           title: Text('收藏', style: titleStyle),
           subtitle: Text('常用设置与最近修改', style: subTitleStyle),
         ),
+        // [MOD-HOOK:settings-sync]
+        ListTile(
+          onTap: () => Get.toNamed('/settingsSync'),
+          leading: const Icon(Icons.sync_outlined),
+          title: Text('配置同步', style: titleStyle),
+          subtitle: Text('多台设备共用同一份设置', style: subTitleStyle),
+        ),
         ..._items
             .take(_items.length - 1)
             .map(

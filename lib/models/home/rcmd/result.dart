@@ -50,6 +50,12 @@ class RcmdVideoItemAppModel extends BaseRcmdVideoItemModel {
         ? ThreePoint.fromJson(json['three_point_v2'])
         : null;
     desc = json['desc'];
+
+    // [MOD-HOOK:card-date] 上游没解析 app 接口的发布日期，导致 app 来源的推荐
+    // 卡片一直不显示日期（只有 web 来源的 RcmdVideoItemModel 解析了）。
+    final dynamic pd =
+        json['pubdate'] ?? json['args']?['pubdate'] ?? json['ctime'];
+    pubdate = pd is int ? pd : (pd is String ? int.tryParse(pd) : null);
   }
 }
 

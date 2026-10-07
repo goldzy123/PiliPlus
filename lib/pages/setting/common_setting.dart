@@ -1,8 +1,8 @@
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/models/common/setting_type.dart';
 import 'package:PiliPlus/pages/setting/models/model.dart';
-import 'package:PiliPlus/pages/setting/setting_favorites.dart';
-import 'package:PiliPlus/pages/setting/setting_refs.dart';
+import 'package:PiliPlus/mod/settings/setting_favorites.dart';
+import 'package:PiliPlus/mod/settings/setting_refs.dart';
 import 'package:material_ui/material_ui.dart';
 
 class CommonSetting extends StatefulWidget {

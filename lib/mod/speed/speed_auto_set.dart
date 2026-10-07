@@ -1,5 +1,6 @@
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
-import 'package:PiliPlus/services/playback_speed_service.dart';
+import 'package:PiliPlus/mod/speed/playback_speed_service.dart';
+import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
@@ -33,6 +34,48 @@ class _SpeedAutoSetPageState extends State<SpeedAutoSetPage> {
     for (final rule in Pref.speedRules) SpeedRule.fromJson(rule),
   ];
   late Map<String, double> _upOverrides = PlaybackSpeedService.upOverrides;
+
+  // 播放页那两个快捷倍速按钮的取值
+  late double _quick1 = Pref.quickSpeed1;
+  late double _quick2 = Pref.quickSpeed2;
+
+  Future<void> _pickQuickSpeed(int index) async {
+    final current = index == 0 ? _quick1 : _quick2;
+    final res = await showDialog<double>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: Text('快捷倍速 ${index + 1}'),
+        children: Pref.speedList
+            .map(
+              (e) => SimpleDialogOption(
+                onPressed: () => Navigator.pop(context, e),
+                child: Text(
+                  '${e == e.roundToDouble() ? e.toStringAsFixed(0) : e}X'
+                  '${e == current ? '   ✓' : ''}',
+                ),
+              ),
+            )
+            .toList(),
+      ),
+    );
+    if (res == null) return;
+    setState(() {
+      if (index == 0) {
+        _quick1 = res;
+      } else {
+        _quick2 = res;
+      }
+    });
+    final ctrl = PlPlayerController.instance;
+    if (ctrl != null) {
+      await ctrl.setQuickSpeed(index, res);
+    } else {
+      await GStorage.video.put(
+        index == 0 ? VideoBoxKey.quickSpeed1 : VideoBoxKey.quickSpeed2,
+        res,
+      );
+    }
+  }
 
   @override
   void dispose() {
@@ -210,6 +253,33 @@ class _SpeedAutoSetPageState extends State<SpeedAutoSetPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
         children: [
+          const Text(
+            '快捷倍速按钮',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 2),
+          const Text(
+            '播放页 UP 主那一行（竖屏）/ 全屏控制条里的两个按钮：\n'
+            '点按切换倍速，长按设为该 UP 的强制倍速（再长按一次取消）',
+            style: TextStyle(fontSize: 12),
+          ),
+          ListTile(
+            dense: true,
+            title: const Text('快捷倍速 1'),
+            trailing: Text(
+              '${_quick1 == _quick1.roundToDouble() ? _quick1.toStringAsFixed(0) : _quick1}X',
+            ),
+            onTap: () => _pickQuickSpeed(0),
+          ),
+          ListTile(
+            dense: true,
+            title: const Text('快捷倍速 2'),
+            trailing: Text(
+              '${_quick2 == _quick2.roundToDouble() ? _quick2.toStringAsFixed(0) : _quick2}X',
+            ),
+            onTap: () => _pickQuickSpeed(1),
+          ),
+          const Divider(height: 28),
           SwitchListTile(
             title: const Text('启用AI分类'),
             subtitle: const Text('未命中本地规则时调用你配置的接口识别UP类别'),

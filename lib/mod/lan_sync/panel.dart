@@ -1,5 +1,5 @@
-import 'package:PiliPlus/services/lan_sync/lan_sync_service.dart';
-import 'package:PiliPlus/services/lan_sync/models.dart';
+import 'package:PiliPlus/mod/lan_sync/lan_sync_service.dart';
+import 'package:PiliPlus/mod/lan_sync/models.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
