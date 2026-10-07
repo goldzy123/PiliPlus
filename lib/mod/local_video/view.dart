@@ -34,10 +34,7 @@ class _LocalVideoPageState extends State<LocalVideoPage>
         actions: [
           IconButton(
             tooltip: '添加视频',
-            onPressed: () async {
-              final n = await _controller.pick();
-              if (n > 0) SmartDialog.showToast('已添加 $n 个视频');
-            },
+            onPressed: _pick,
             icon: const Icon(Icons.add),
           ),
           Obx(
@@ -98,6 +95,12 @@ class _LocalVideoPageState extends State<LocalVideoPage>
     );
   }
 
+  Future<void> _pick() async {
+    final res = await _controller.pick();
+    final msg = res.message;
+    if (msg.isNotEmpty) SmartDialog.showToast(msg);
+  }
+
   Widget _empty(ThemeData theme) {
     return Center(
       child: Column(
@@ -120,10 +123,7 @@ class _LocalVideoPageState extends State<LocalVideoPage>
           ),
           const SizedBox(height: 20),
           FilledButton.icon(
-            onPressed: () async {
-              final n = await _controller.pick();
-              if (n > 0) SmartDialog.showToast('已添加 $n 个视频');
-            },
+            onPressed: _pick,
             icon: const Icon(Icons.add),
             label: const Text('添加视频'),
           ),

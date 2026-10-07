@@ -28,21 +28,39 @@ abstract final class PlaybackSpeedService {
     return '$mid|$key';
   }
 
-  static Map<String, double> _videoSpeedMap() => Map<String, double>.from(
-    _video.get(_scope('videoSpeedMap'), defaultValue: <String, double>{}),
-  );
+  /// 容错读成 double 映射。
+  ///
+  /// 不能用 `Map<String, double>.from(raw)`：Hive 里若存的是 int（例如 2），
+  /// 会抛 `type 'int' is not a subtype of type 'double'`；而调用点在倍速按钮的
+  /// Obx 里，一抛异常整个视频详情页介绍区就变成错误占位（release 下是灰块）。
+  /// 配置同步把 JSON 写回来时也可能带来 int，所以这里必须容错。
+  static Map<String, double> _toDoubleMap(Object? raw) {
+    if (raw is! Map) return <String, double>{};
+    final out = <String, double>{};
+    for (final e in raw.entries) {
+      final v = e.value;
+      final d = v is num ? v.toDouble() : double.tryParse('$v');
+      if (d != null) out['${e.key}'] = d;
+    }
+    return out;
+  }
 
-  static Map<String, double> _upSpeedMap() => Map<String, double>.from(
-    _video.get(_scope('upSpeedMap'), defaultValue: <String, double>{}),
-  );
+  static Map<String, String> _toStringMap(Object? raw) {
+    if (raw is! Map) return <String, String>{};
+    return {for (final e in raw.entries) '${e.key}': '${e.value}'};
+  }
 
-  static Map<String, String> _upNameMap() => Map<String, String>.from(
-    _video.get(_scope('upNameMap'), defaultValue: <String, String>{}),
-  );
+  static Map<String, double> _videoSpeedMap() =>
+      _toDoubleMap(_video.get(_scope('videoSpeedMap')));
 
-  static Map<String, String> _aiCategoryMap() => Map<String, String>.from(
-    _video.get(_scope('aiCategoryMap'), defaultValue: <String, String>{}),
-  );
+  static Map<String, double> _upSpeedMap() =>
+      _toDoubleMap(_video.get(_scope('upSpeedMap')));
+
+  static Map<String, String> _upNameMap() =>
+      _toStringMap(_video.get(_scope('upNameMap')));
+
+  static Map<String, String> _aiCategoryMap() =>
+      _toStringMap(_video.get(_scope('aiCategoryMap')));
 
   static double? videoSpeed(String bvid, int cid) =>
       _videoSpeedMap()['$bvid:$cid'];

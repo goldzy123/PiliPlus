@@ -29,6 +29,7 @@ class _SettingsSyncPageState extends State<SettingsSyncPage> {
     text: SyncConfig.profile,
   );
   late bool _auto = SyncConfig.auto;
+  late bool _enabled = SyncConfig.enabled;
 
   @override
   void dispose() {
@@ -59,7 +60,9 @@ class _SettingsSyncPageState extends State<SettingsSyncPage> {
       SmartDialog.showToast('$e');
     } finally {
       _svc.busy.value = false;
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() => _enabled = SyncConfig.enabled);
+      }
     }
   }
 
@@ -176,23 +179,27 @@ class _SettingsSyncPageState extends State<SettingsSyncPage> {
             label: const Text('把本机配置上传'),
           ),
           const SizedBox(height: 10),
-          Obx(
-            () => SyncConfig.enabled
-                ? OutlinedButton.icon(
-                    onPressed: () {
-                      _svc.stop();
-                      setState(() {});
-                      SmartDialog.showToast('已关闭自动同步');
-                    },
-                    icon: const Icon(Icons.stop_circle_outlined),
-                    label: const Text('关闭自动同步'),
-                  )
-                : FilledButton.tonalIcon(
-                    onPressed: () => _guard(_svc.start),
-                    icon: const Icon(Icons.play_circle_outline),
-                    label: const Text('开启自动同步'),
-                  ),
-          ),
+          // 注意：这里不能用 Obx —— SyncConfig.enabled 是普通 Hive getter，
+          // 不是可观察量，GetX 会报 "improper use of a GetX" 并在 release 下渲染成灰块。
+          if (_enabled)
+            OutlinedButton.icon(
+              onPressed: () {
+                _svc.stop();
+                setState(() => _enabled = SyncConfig.enabled);
+                SmartDialog.showToast('已关闭自动同步');
+              },
+              icon: const Icon(Icons.stop_circle_outlined),
+              label: const Text('关闭自动同步'),
+            )
+          else
+            FilledButton.tonalIcon(
+              onPressed: () => _guard(() async {
+                await _svc.start();
+                if (mounted) setState(() => _enabled = SyncConfig.enabled);
+              }),
+              icon: const Icon(Icons.play_circle_outline),
+              label: const Text('开启自动同步'),
+            ),
           const SizedBox(height: 20),
           Obx(() {
             final last = SyncConfig.lastSyncAt;
