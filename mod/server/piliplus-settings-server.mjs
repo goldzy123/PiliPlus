@@ -8,8 +8,17 @@
  *   GET    /api/profiles                 列出所有配置
  *   GET    /api/profiles/<name>          读取配置
  *   PUT    /api/profiles/<name>          写入配置
- *        body: { data: {...}, baseRev?: number, device?: string }
+ *        body: { dataRaw: "<json 字符串>", baseRev?: number, device?: string }
+ *        也接受老客户端的 { data: {...} }（会被 JS 降级类型，见下）
  *        baseRev 与服务端当前 rev 不一致时返回 409 + 服务端当前内容
+ *
+ * ⚠️ 为什么数据是「字符串」而不是对象：
+ *    JavaScript 只有一种 number，没有 int/double 之分。客户端传 1.0（double），
+ *    只要过一遍 JSON.parse → JSON.stringify 就变成 1，客户端再解析就成了 int。
+ *    Dart 是有 int/double 之分的，于是 `double get defaultTextScale` 读到 int 就抛
+ *    `type 'int' is not a subtype of type 'double'`，MaterialApp 构建失败 → 整屏变灰
+ *    （实测把 S20 的 dev 版搞成这样）。所以这里把 data 当**不透明字符串**存和返回，
+ *    一个字节都不碰。
  *   DELETE /api/profiles/<name>          删除配置
  *   GET    /health                       健康检查
  *
@@ -55,6 +64,23 @@ async function readProfile(name) {
     if (err.code === 'ENOENT') return null;
     throw err;
   }
+}
+
+/**
+ * 返回给客户端时统一带 dataRaw。
+ * 老文件（只有 data 对象）在这里补一个 dataRaw —— 但它的类型已经被 JS 降级过，
+ * 补出来的同样有损，客户端要自己按 types 清单纠正（源设备重新上传一次即可恢复）。
+ */
+function withRaw(p) {
+  if (!p) return { dataRaw: null, data: null };
+  const dataRaw = typeof p.dataRaw === 'string' ? p.dataRaw : JSON.stringify(p.data ?? {});
+  let data = null;
+  try {
+    data = JSON.parse(dataRaw);
+  } catch {
+    data = null;
+  }
+  return { name: p.name, rev: p.rev, updatedAt: p.updatedAt, device: p.device, dataRaw, data };
 }
 
 async function writeProfile(name, payload) {
@@ -135,7 +161,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET') {
       const p = await readProfile(name);
       if (!p) return json(res, 404, { error: 'no such profile' });
-      return json(res, 200, p);
+      return json(res, 200, withRaw(p));
     }
 
     if (req.method === 'PUT') {
@@ -145,8 +171,19 @@ const server = http.createServer(async (req, res) => {
       } catch {
         return json(res, 400, { error: 'bad json body' });
       }
-      if (typeof body?.data !== 'object' || body.data === null) {
-        return json(res, 400, { error: 'data must be an object' });
+      // 首选 dataRaw（字符串，类型无损）；老客户端只有 data（对象，类型已被 JS 降级）
+      let dataRaw;
+      if (typeof body?.dataRaw === 'string') {
+        dataRaw = body.dataRaw;
+        try {
+          JSON.parse(dataRaw); // 只做合法性校验，不保留解析结果
+        } catch {
+          return json(res, 400, { error: 'dataRaw must be valid json' });
+        }
+      } else if (typeof body?.data === 'object' && body.data !== null) {
+        dataRaw = JSON.stringify(body.data);
+      } else {
+        return json(res, 400, { error: 'need dataRaw (string) or data (object)' });
       }
       const cur = await readProfile(name);
       const curRev = cur?.rev ?? 0;
@@ -156,7 +193,7 @@ const server = http.createServer(async (req, res) => {
           rev: curRev,
           updatedAt: cur?.updatedAt ?? 0,
           device: cur?.device ?? '',
-          data: cur?.data ?? null,
+          ...withRaw(cur),
         });
       }
       const next = {
@@ -164,10 +201,10 @@ const server = http.createServer(async (req, res) => {
         rev: curRev + 1,
         updatedAt: Date.now(),
         device: String(body.device ?? '').slice(0, 64),
-        data: body.data,
+        dataRaw,
       };
       await writeProfile(name, next);
-      log(`PUT ${name} rev=${next.rev} keys=${Object.keys(next.data).length}`);
+      log(`PUT ${name} rev=${next.rev} bytes=${dataRaw.length}`);
       return json(res, 200, { name, rev: next.rev, updatedAt: next.updatedAt });
     }
 

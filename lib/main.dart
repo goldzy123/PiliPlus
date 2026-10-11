@@ -15,6 +15,7 @@ import 'package:PiliPlus/router/app_pages.dart';
 import 'package:PiliPlus/services/account_service.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/services/logger.dart';
+import 'package:PiliPlus/mod/diagnostics/error_overlay.dart';
 import 'package:PiliPlus/mod/lan_sync/lan_sync_service.dart';
 import 'package:PiliPlus/mod/settings_sync/sync_service.dart';
 import 'package:PiliPlus/services/service_locator.dart';
@@ -140,6 +141,8 @@ void main() async {
   Request.setCookie();
   RequestUtils.syncHistoryStatus();
   unawaited(LanSyncService.instance.start());
+  // [MOD-HOOK:error-overlay] 把 release 下的灰方块换成可读的异常文本
+  ModErrorOverlay.install();
   // [MOD-HOOK:settings-sync] 初始化配置同步（未启用时什么都不做）
   SettingsSyncService.to;
 

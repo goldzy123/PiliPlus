@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/extension/get_ext.dart';
@@ -161,9 +162,71 @@ class SettingsSyncService extends GetxController {
 
   // ── 采集 / 应用 ────────────────────────────────────────────────
 
-  /// 把两个 box 里可同步的键打包成 JSON。
+  /// 值的类型标签。
+  ///
+  /// 为什么需要它：JSON 分不出 int/double（服务端是 JS 时更彻底，`1.0` 过一遍
+  /// JSON.parse→stringify 就成 `1`），而 Dart 分得很清楚。`double get defaultTextScale`
+  /// 读到 int 就抛 `type 'int' is not a subtype of type 'double'`，MaterialApp 构建失败
+  /// → 整屏变灰（实测把 S20 的 dev 版搞成这样）。所以采集时把类型记下来，
+  /// 应用时按它还原，跨语言往返也不会走样。
+  static String _typeTag(dynamic v) {
+    if (v is int) return 'int';
+    if (v is double) return 'double';
+    if (v is bool) return 'bool';
+    if (v is String) return 'String';
+    if (v is List) {
+      return 'List<${v.isEmpty ? '' : _typeTag(v.first)}>';
+    }
+    if (v is Map) {
+      return 'Map<String,${v.isEmpty ? '' : _typeTag(v.values.first)}>';
+    }
+    return '';
+  }
+
+  /// 按类型标签把 JSON 里的值还原成原来的 Dart 类型。
+  static dynamic _coerceByTag(String tag, dynamic v) {
+    if (v == null) return null;
+    switch (tag) {
+      case 'int':
+        return v is num ? v.toInt() : v;
+      case 'double':
+        return v is num ? v.toDouble() : v;
+      case 'bool':
+        return v;
+      case 'String':
+        return v is String ? v : v.toString();
+    }
+    if (v is List && tag.startsWith('List<')) {
+      final inner = tag.substring(5, tag.length - 1);
+      if (inner.isEmpty) return v;
+      return [for (final e in v) _coerceByTag(inner, e)];
+    }
+    if (v is Map && tag.startsWith('Map<String,')) {
+      final inner = tag.substring(11, tag.length - 1);
+      if (inner.isEmpty) return Map<String, dynamic>.from(v);
+      return {
+        for (final e in v.entries) e.key.toString(): _coerceByTag(inner, e.value),
+      };
+    }
+    return v;
+  }
+
+  /// 老数据没有类型标签时，按「double 优先」纠正 int/double 冲突。
+  ///
+  /// 依据：类型被破坏的方向只有一个 —— double 被降级成 int（JS 没有 int/double 之分）。
+  /// 反过来（本该是 int 却被写成 double）只会来自应用端自己，而那样本地早就报错了。
+  /// 所以见到一边是 double 就写 double，既安全又能把已经坏掉的值修回来。
+  static dynamic _coerceNumber(dynamic local, dynamic v) {
+    if (v is double || local is double) {
+      if (v is num) return v.toDouble();
+    }
+    if (v is int && local is int) return v;
+    return v;
+  }
+
+  /// 把两个 box 里可同步的键打包成 JSON（带类型清单）。
   Map<String, dynamic> collect() {
-    Map<String, dynamic> dump(Box box) {
+    Map<String, dynamic> dump(Box box, Map<String, String> types) {
       final out = <String, dynamic>{};
       for (final key in box.keys) {
         final k = key.toString();
@@ -173,39 +236,70 @@ class SettingsSyncService extends GetxController {
         // Hive 存的基本都是 JSON 友好的类型；遇到不认识的直接跳过
         if (v is Map || v is List || v is String || v is num || v is bool) {
           out[k] = v is Map ? Map<String, dynamic>.from(v) : v;
+          final tag = _typeTag(v);
+          if (tag.isNotEmpty) types[k] = tag;
         }
       }
       return out;
     }
 
+    final settingTypes = <String, String>{};
+    final videoTypes = <String, String>{};
     return {
-      'version': 1,
+      'version': 2,
       'exportedAt': DateTime.now().millisecondsSinceEpoch,
       'boxes': {
-        'setting': dump(GStorage.setting),
-        'video': dump(GStorage.video),
+        'setting': dump(GStorage.setting, settingTypes),
+        'video': dump(GStorage.video, videoTypes),
+      },
+      'types': {
+        'setting': settingTypes,
+        'video': videoTypes,
       },
     };
   }
 
   /// 把远端数据写回本地（只做覆盖写入，不删除本地独有的键）。
-  Future<int> apply(Map<String, dynamic> data) async {
+  ///
+  /// 返回实际写入的项数；`skipped` 是「远端没带类型信息、本地又没有该键，
+  /// 拿不准该写成什么类型」而跳过的项数。
+  Future<int> apply(Map<String, dynamic> data, {void Function(int skipped)? onSkipped}) async {
     final boxes = data['boxes'];
     if (boxes is! Map) return 0;
+    final types = data['types'] is Map
+        ? Map<String, dynamic>.from(data['types'] as Map)
+        : const <String, dynamic>{};
     var count = 0;
+    var skipped = 0;
     _applying = true;
     try {
       for (final entry in {'setting': GStorage.setting, 'video': GStorage.video}.entries) {
         final incoming = boxes[entry.key];
         if (incoming is! Map) continue;
+        final typeMap = types[entry.key] is Map
+            ? Map<String, dynamic>.from(types[entry.key] as Map)
+            : const <String, dynamic>{};
         final patch = <String, dynamic>{};
         for (final e in incoming.entries) {
           final k = e.key.toString();
           if (!_syncable(k)) continue;
+          final local = entry.value.get(k);
           var v = e.value;
-          // JSON 往返会把 2.0 变成 int 2；本地原本是 double 的话要还原，
-          // 否则下游 `as double` 之类的代码会抛类型错误（踩过）。
-          if (v is int && entry.value.get(k) is double) v = v.toDouble();
+          final tag = typeMap[k]?.toString();
+          if (tag != null && tag.isNotEmpty) {
+            // 1) 远端自带类型 → 按类型还原（最准）
+            v = _coerceByTag(tag, v);
+          } else if (local != null) {
+            // 2) 老格式没有类型信息，本地已有该键 → 按本地类型纠正
+            v = _coerceNumber(local, v);
+          } else {
+            // 3) 老格式 + 本地没有该键 → 类型无从判断。
+            //    宁可不写：写错类型会让 app 直接抛异常（首屏变灰），
+            //    不写只是这个设置暂时保持默认值。等任一设备重新上传一次
+            //    （带上类型清单）就能正常同步。
+            skipped++;
+            continue;
+          }
           patch[k] = v;
         }
         if (patch.isEmpty) continue;
@@ -215,8 +309,11 @@ class SettingsSyncService extends GetxController {
     } finally {
       _applying = false;
     }
-    // 让已经构建好的界面重新读一遍 Pref
-    Get.forceAppUpdate();
+    onSkipped?.call(skipped);
+    // 注意：这里**不能**调 Get.forceAppUpdate()。
+    // 它的实现是 engine.performReassemble()，也就是热重载用的"整个 app 从零重建"
+    // （官方注释原话：调用期间触摸事件不生效）。同步在启动阶段一跑就把首屏搞成卡死。
+    // 设置项都是现读现用的，不需要重建。
     return count;
   }
 
@@ -247,7 +344,10 @@ class SettingsSyncService extends GetxController {
     final res = await _client.put(
       '/api/profiles/${Uri.encodeComponent(target)}',
       data: {
-        'data': collect(),
+        // 发字符串而不是对象：服务端是 JS，`data` 过一遍 JSON.parse/stringify
+        // 就会把 1.0 变成 1，double 全部降级成 int（踩过，见 collect() 注释）。
+        // 当字符串发，服务端原样存、原样回，一个字节都不动。
+        'dataRaw': jsonEncode(collect()),
         'baseRev': baseRev ?? SyncConfig.rev,
         'device': await deviceName(),
       },
@@ -268,13 +368,24 @@ class SettingsSyncService extends GetxController {
       status.value = '已是最新（rev $rev）';
       return 0;
     }
-    final data = res.data?['data'];
-    if (data is! Map) throw '远端数据格式不对';
-    final n = await apply(Map<String, dynamic>.from(data));
+    Map<String, dynamic>? data;
+    final raw = res.data?['dataRaw'];
+    if (raw is String && raw.isNotEmpty) {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) data = Map<String, dynamic>.from(decoded);
+    } else if (res.data?['data'] is Map) {
+      // 老服务端只回 data 对象
+      data = Map<String, dynamic>.from(res.data!['data'] as Map);
+    }
+    if (data == null) throw '远端数据格式不对';
+    var skipped = 0;
+    final n = await apply(data, onSkipped: (s) => skipped = s);
     SyncConfig.profile = target;
     SyncConfig.rev = rev;
     SyncConfig.lastSyncAt = DateTime.now().millisecondsSinceEpoch;
-    status.value = '已拉取 rev $rev，应用 $n 项';
+    status.value = skipped > 0
+        ? '已拉取 rev $rev，应用 $n 项，跳过 $skipped 项（远端是旧格式，缺类型信息；在常用设备上重新上传一次即可）'
+        : '已拉取 rev $rev，应用 $n 项';
     return n;
   }
 
