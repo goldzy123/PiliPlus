@@ -185,6 +185,13 @@ class _SettingPageState extends State<SettingPage> {
           title: Text('收藏', style: titleStyle),
           subtitle: Text('常用设置与最近修改', style: subTitleStyle),
         ),
+        // [MOD-HOOK:nav-history]
+        ListTile(
+          onTap: () => Get.toNamed('/navHistory'),
+          leading: const Icon(Icons.account_tree_outlined),
+          title: Text('浏览历史', style: titleStyle),
+          subtitle: Text('带分叉的页面树，可以跳回任意一个位置', style: subTitleStyle),
+        ),
         // [MOD-HOOK:settings-sync]
         ListTile(
           onTap: () => Get.toNamed('/settingsSync'),

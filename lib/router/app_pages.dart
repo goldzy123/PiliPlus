@@ -55,6 +55,7 @@ import 'package:PiliPlus/pages/search_trending/view.dart';
 import 'package:PiliPlus/pages/setting/pages/bar_set.dart';
 import 'package:PiliPlus/pages/setting/pages/color_select.dart';
 import 'package:PiliPlus/pages/setting/pages/display_mode.dart';
+import 'package:PiliPlus/mod/nav_history/view.dart';
 import 'package:PiliPlus/mod/settings/favorite_settings_page.dart';
 import 'package:PiliPlus/mod/settings_sync/view.dart';
 import 'package:PiliPlus/pages/setting/pages/font_setting.dart';
@@ -129,6 +130,8 @@ class Routes {
     ),
     // [MOD-HOOK:settings-sync]
     GetPage(name: '/settingsSync', page: () => const SettingsSyncPage()),
+    // [MOD-HOOK:nav-history]
+    GetPage(name: '/navHistory', page: () => const NavHistoryPage()),
     // 收藏搜索
     GetPage(name: '/favSearch', page: () => const FavSearchPage()),
     GetPage(name: '/historySearch', page: () => const HistorySearchPage()),

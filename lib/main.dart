@@ -15,6 +15,7 @@ import 'package:PiliPlus/router/app_pages.dart';
 import 'package:PiliPlus/services/account_service.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/services/logger.dart';
+import 'package:PiliPlus/mod/nav_history/nav_history.dart';
 import 'package:PiliPlus/mod/diagnostics/error_overlay.dart';
 import 'package:PiliPlus/mod/lan_sync/lan_sync_service.dart';
 import 'package:PiliPlus/mod/settings_sync/sync_service.dart';
@@ -314,6 +315,8 @@ class MyApp extends StatelessWidget {
       navigatorObservers: [
         routeObserver,
         FlutterSmartDialog.observer,
+        // [MOD-HOOK:nav-history] 把每次页面进出记进浏览历史树
+        ModNavObserver(),
       ],
       scrollBehavior: PlatformUtils.isDesktop
           ? const CustomScrollBehavior()
