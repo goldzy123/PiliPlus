@@ -270,5 +270,13 @@
       -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <!--
+      [MOD-HOOK:local-video-scan]
+      「本地」tab 的常用目录扫描要能列目录内容。Android 11+ 的分区存储下
+      单纯 READ_MEDIA_VIDEO 只能按 MediaStore 拿媒体文件、不能列任意目录，
+      所以这里额外声明「所有文件访问」。只有用户主动点「扫描目录」时才去申请，
+      不申请就不影响其它功能（手动选片那条路完全不需要它）。
+    -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_SETTINGS" />
 </manifest>
