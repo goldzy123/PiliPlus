@@ -31,6 +31,7 @@ import 'package:PiliPlus/plugin/pl_player/models/video_fit_type.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/danmaku_options.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart';
 import 'package:PiliPlus/services/service_locator.dart';
+import 'package:PiliPlus/mod/player/playback_watchdog.dart';
 import 'package:PiliPlus/mod/speed/playback_speed_service.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/android/android_helper.dart';
@@ -162,9 +163,8 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   Timer? _timer;
   StreamSubscription? _subForSeek;
 
-  /// seek 卡死自愈看门狗（详见 [_armSeekWatchdog]）
-  Timer? _seekWatchdog;
-  int _seekStallRetry = 0;
+  // [MOD-HOOK:playback-watchdog] 播放健康看门狗（时钟/画面停住自愈，见 lib/mod/player/）
+  PlaybackWatchdog? _playbackWatchdog;
 
   /// 由 [VideoDetailController] 注入：seek 卡死且重试无效时重新取流并回到该位置
   Future<void> Function(Duration position)? onSeekStalled;
@@ -900,6 +900,17 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
     _startListeners(player);
 
+    // [MOD-HOOK:playback-watchdog] 「声音在走但画面冻住」自愈。
+    // 触发场景：seek 之后、切后台回来音频设备/surface 被重建之后。
+    _playbackWatchdog?.stop();
+    _playbackWatchdog = PlaybackWatchdog(
+      player: player,
+      isPlaying: () => playerStatus == .playing,
+      isBusy: () => isSeeking.value || isBuffering.value,
+      onHardStall: (position) => onSeekStalled?.call(position),
+      onHealed: (why) => SmartDialog.showToast('播放卡顿已自动恢复：$why'),
+    )..start();
+
     return player;
   }
 
@@ -1211,55 +1222,11 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     try {
       await _videoPlayerController?.seek(position);
       _updateIOSPip(position);
-      // 新的 seek 视为新一轮，重置上一次的重试计数
-      _seekStallRetry = 0;
-      _armSeekWatchdog(position);
+      // 新的 seek 视为新一轮，让看门狗丢掉旧采样重新观察
+      _playbackWatchdog?.kick();
     } catch (e) {
       if (kDebugMode) debugPrint('seek failed: $e');
     }
-  }
-
-  /// seek 卡死自愈。
-  ///
-  /// 某些音频后端（尤其 AAudio，见 [AudioOutput.resolveMpvAo]）在 seek 之后
-  /// 会让 mpv 的时钟卡住：状态仍是 playing、声音也还在播，但进度不再前进、
-  /// 画面冻住。这里做兜底：
-  ///   1. seek 后若干秒内进度仍停在目标附近 → 重试一次 seek；
-  ///   2. 仍然卡住 → 回调 [onSeekStalled]，由上层重新取流并回到该位置。
-  void _armSeekWatchdog(Duration target) {
-    _seekWatchdog?.cancel();
-    _seekWatchdog = Timer(const Duration(seconds: 4), () async {
-      _seekWatchdog = null;
-      if (_instance == null ||
-          _videoPlayerController == null ||
-          isSeeking.value ||
-          !playerStatus.isPlaying) {
-        return;
-      }
-      // 进度已经走开（>2s）说明 seek 正常，重置重试计数
-      if ((position.value - target.inSeconds).abs() > 2) {
-        _seekStallRetry = 0;
-        return;
-      }
-      if (_seekStallRetry == 0) {
-        _seekStallRetry = 1;
-        try {
-          await _videoPlayerController?.seek(target);
-        } catch (_) {}
-        _armSeekWatchdog(target);
-      } else {
-        _seekStallRetry = 0;
-        try {
-          await onSeekStalled?.call(target);
-        } catch (_) {}
-      }
-    });
-  }
-
-  void _cancelSeekWatchdog() {
-    _seekWatchdog?.cancel();
-    _seekWatchdog = null;
-    _seekStallRetry = 0;
   }
 
   /// 跳转至指定位置
@@ -1747,7 +1714,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     resetScreenRotation();
     cancelLongPressTimer();
     _cancelSubForSeek();
-    _cancelSeekWatchdog();
+    _playbackWatchdog?.stop();
     if (!_isCloseAll && _playerCount > 1) {
       _playerCount -= 1;
       _heartDuration = 0;
