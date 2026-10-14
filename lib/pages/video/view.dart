@@ -1181,6 +1181,11 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         ),
         child: const Text('AI总结'),
       ),
+      // [MOD-HOOK:nav-history-entry] 浏览历史树的直达入口（原在设置页，太深）
+      PopupMenuItem(
+        onTap: () => Get.toNamed('/navHistory'),
+        child: const Text('浏览历史'),
+      ),
       PopupMenuItem(
         onTap: introController.viewLater,
         child: const Text('稍后再看'),
