@@ -1,6 +1,9 @@
 abstract final class Constants {
   static const appName = 'PiliPlus';
-  static const sourceCodeUrl = 'https://github.com/bggRGjQaUbCoE/PiliPlus';
+  // [MOD-HOOK:fork-repo] 指向本 fork：这样「检查更新 / 查看源码」都落到自己的构建上，
+  // 上游发版不会把用户引到上游的包（mod 与上游不同包名，装混了会互相冲突）。
+  // 云编译工作流 .github/workflows/mod-release.yml 也是发到这个仓库的 release。
+  static const sourceCodeUrl = 'https://github.com/goldzy123/PiliPlus';
 
   // 27eb53fc9058f8c3  移动端 Android
   // 4409e2ce8ffd12b8  HD版

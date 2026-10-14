@@ -409,8 +409,9 @@ abstract final class Api {
   static const String blackList = '/x/relation/blacks';
 
   // github 获取最新版
+  // [MOD-HOOK:fork-repo] 更新检查读本 fork 的 release 列表（见 constants.dart 里的说明）
   static const String latestApp =
-      'https://api.github.com/repos/bggRGjQaUbCoE/PiliPlus/releases';
+      'https://api.github.com/repos/goldzy123/PiliPlus/releases';
 
   // 多少人在看
   // https://api.bilibili.com/x/player/online/total?aid=913663681&cid=1203559746&bvid=BV1MM4y1s7NZ&ts=56427838
