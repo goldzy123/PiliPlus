@@ -1,6 +1,7 @@
 import 'package:PiliPlus/common/widgets/custom_icon.dart';
 import 'package:PiliPlus/http/user.dart';
 import 'package:PiliPlus/http/video.dart';
+import 'package:PiliPlus/mod/ai_summary/ai_summary_ui.dart';
 import 'package:PiliPlus/models/home/rcmd/result.dart';
 import 'package:PiliPlus/models/model_video.dart';
 import 'package:PiliPlus/models_new/space/space_archive/item.dart';
@@ -71,6 +72,17 @@ class VideoPopupMenu extends StatelessWidget {
                           videoItem.cid!,
                           videoItem.owner.mid,
                         );
+                        // [MOD-HOOK:ai-summary-fallback] 官方没有就本地生成
+                        if (res == null && context.mounted) {
+                          await ModAiSummary.fallbackByBvid(
+                            context: context,
+                            bvid: videoItem.bvid!,
+                            cid: '${videoItem.cid}',
+                            title: videoItem.title ?? '',
+                            upName: videoItem.owner.name ?? '',
+                          );
+                          return;
+                        }
                         if (res != null && context.mounted) {
                           showDialog(
                             context: context,

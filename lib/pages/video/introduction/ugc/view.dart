@@ -13,7 +13,6 @@ import 'package:PiliPlus/common/widgets/selection_text.dart';
 import 'package:PiliPlus/common/widgets/stat/stat.dart';
 import 'package:PiliPlus/common/widgets/translucent_column.dart';
 import 'package:PiliPlus/http/sponsor_block.dart';
-import 'package:PiliPlus/models_new/video/video_ai_conclusion/model_result.dart';
 import 'package:PiliPlus/models_new/video/video_detail/data.dart';
 import 'package:PiliPlus/models_new/video/video_detail/desc_v2.dart';
 import 'package:PiliPlus/models_new/video/video_detail/staff.dart';
@@ -984,22 +983,25 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
           if (introController.aiConclusionResult == null) {
             await introController.aiConclusion();
           }
-          if (introController.aiConclusionResult case AiConclusionResult(
-            :final summary,
-            :final outline,
-          )) {
-            if (summary?.isNotEmpty == true || outline?.isNotEmpty == true) {
-              widget.showAiBottomSheet();
-            } else {
-              // [MOD-HOOK:ai-summary-fallback] B 站没生成过这个视频的总结 —— 不再
-              // 一句"不支持"打发掉，改成取字幕让局域网的 Mac 生成一份。
-              await ModAiSummary.fallback(
-                context: context,
-                ctr: introController.videoDetailCtr,
-                title: introController.videoDetail.value.title ?? '',
-                upName: introController.videoDetail.value.owner?.name ?? '',
-              );
-            }
+          // [MOD-HOOK:ai-summary-fallback] 原来的写法是 `if (result case AiConclusionResult(...))`
+          // 才处理 —— 而官方接口**失败时 aiConclusionResult 保持 null**，那个 case 不匹配，
+          // 于是整个点击**一声不响什么都没发生**（这正是"AI总结不好用"的真正原因，
+          // 不只是"B站没生成过"）。这里改成：只有真拿到内容才弹官方面板，
+          // 其余情况（null / 空）一律走本地生成。
+          final res = introController.aiConclusionResult;
+          final hasContent = res != null &&
+              ((res.summary?.isNotEmpty ?? false) ||
+                  (res.outline?.isNotEmpty ?? false));
+          if (hasContent) {
+            widget.showAiBottomSheet();
+          } else if (context.mounted) {
+            // 官方没有 → 取字幕交给局域网 Mac 生成（没字幕就转写音频）
+            await ModAiSummary.fallback(
+              context: context,
+              ctr: introController.videoDetailCtr,
+              title: introController.videoDetail.value.title ?? '',
+              upName: introController.videoDetail.value.owner?.name ?? '',
+            );
           }
         },
         child: Image.asset(

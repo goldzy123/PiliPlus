@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 import 'dart:math';
 
 import 'package:PiliPlus/common/assets.dart';
+import 'package:PiliPlus/mod/ai_summary/ai_summary_ui.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/custom_icon.dart';
 import 'package:PiliPlus/common/widgets/flutter/pop_scope.dart';
@@ -1168,6 +1169,18 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       shadows: shadows,
     ),
     itemBuilder: (BuildContext context) => <PopupMenuEntry>[
+      // [MOD-HOOK:ai-summary] 简介面板里那个 AI 小图标外面套着一层
+      // 「点击展开/收起」的 GestureDetector，实测点击会被它吃掉 ——
+      // 用户根本点不到。这里在 ⋯ 菜单里给一个正常大小的可靠入口。
+      PopupMenuItem(
+        onTap: () => ModAiSummary.openFor(
+          context: context,
+          ctr: videoDetailController,
+          title: introController.videoDetail.value.title ?? '',
+          upName: videoDetailController.currentUpName ?? '',
+        ),
+        child: const Text('AI总结'),
+      ),
       PopupMenuItem(
         onTap: introController.viewLater,
         child: const Text('稍后再看'),

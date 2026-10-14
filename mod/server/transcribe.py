@@ -16,6 +16,7 @@ Paraformer/SenseVoice + FSMN-VAD + CT-Punc），不重复造轮子 —— 那边
 import argparse
 import logging
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -40,28 +41,28 @@ def main() -> int:
 
     fast = not args.accurate
     asr_diar.load_pipeline(device_pref="auto", fast=fast)
-    hotwords = None
-    if args.hotwords and Path(args.hotwords).exists():
-        try:
-            hotwords = asr_diar.load_hotwords(args.hotwords)
-        except Exception as e:  # 热词只是加成，坏了不影响主流程
-            print(f"hotwords 载入失败，忽略：{e}", file=sys.stderr)
 
-    segments = asr_diar.transcribe(args.audio, fast=fast, hotwords=hotwords)
-    # transcribe 返回 [(spk, start, end, text), ...] 这类结构，尽量兼容
-    lines = []
-    for seg in segments or []:
-        if isinstance(seg, str):
-            lines.append(seg)
-        elif isinstance(seg, (list, tuple)) and seg:
-            text = seg[-1]
-            if text and str(text).strip():
-                lines.append(str(text).strip())
-        elif isinstance(seg, dict):
-            t = seg.get("text") or seg.get("content")
-            if t:
-                lines.append(str(t).strip())
-    print("\n".join(lines))
+    # 管线里 ASR 吃的是 16k 单声道 wav（它们平时也是先 ffmpeg 转一道）。
+    # 直接从 yt-dlp 拿到的 m4a 也别指望 FunASR 自己能读，统一转一次。
+    src = Path(args.audio)
+    wav = src.with_suffix(".16k.wav")
+    if not wav.exists():
+        subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error", "-i", str(src),
+             "-ac", "1", "-ar", "16000", str(wav)],
+            check=True,
+        )
+
+    # transcribe(wav_path, device_pref, fast, spk_num) -> {"text", "segments", "centers"}
+    # 热词由 config 里的 use_seaco_hotword 控制，不用在这里传。
+    res = asr_diar.transcribe(str(wav), fast=fast)
+    if not isinstance(res, dict):
+        print(str(res))
+        return 0
+    segs = res.get("segments") or []
+    lines = [str(s.get("text", "")).strip() for s in segs if s.get("text")]
+    out = "\n".join(t for t in lines if t)
+    print(out if out else str(res.get("text", "")).strip())
     return 0
 
 

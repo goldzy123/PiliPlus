@@ -1,5 +1,8 @@
 import 'package:PiliPlus/mod/ai_summary/summary_service.dart';
+import 'package:PiliPlus/models_new/video/video_ai_conclusion/model_result.dart';
+import 'package:PiliPlus/pages/video/ai_conclusion/view.dart';
 import 'package:PiliPlus/pages/video/controller.dart';
+import 'package:PiliPlus/pages/video/introduction/ugc/controller.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -45,6 +48,98 @@ abstract final class ModAiSummary {
       upName: upName,
     );
 
+    if (res == null) {
+      SmartDialog.showToast('连不上总结服务：${ModSummaryService.baseUrl}');
+      return true;
+    }
+    if (res.failed || res.summary.isEmpty) {
+      SmartDialog.showToast(res.sourceLabel);
+      return true;
+    }
+    if (context.mounted) _show(context, res);
+    return true;
+  }
+
+  /// 视频页顶栏 ⋯ 菜单里的「AI总结」。
+  ///
+  /// 为什么专门加这个入口：简介面板里那个 AI 小图标外面套着一层
+  /// 「点击展开/收起」的 GestureDetector（ugc/view.dart 的 SliverToBoxAdapter 外层），
+  /// 实测点击会被它吃掉、只会把面板展开收起 —— 用户根本点不到那个按钮。
+  /// 菜单项是个正常大小的目标，可靠得多。
+  ///
+  /// 逻辑：官方有结论就弹官方面板，否则走本地生成。
+  static Future<void> openFor({
+    required BuildContext context,
+    required VideoDetailController ctr,
+    String title = '',
+    String upName = '',
+  }) async {
+    AiConclusionResult? official;
+    try {
+      official = await UgcIntroController.getAiConclusion(
+        ctr.bvid,
+        ctr.cid.value,
+        ctr.currentUpMid,
+      );
+    } catch (_) {
+      official = null;
+    }
+    final hasContent = official != null &&
+        ((official.summary?.isNotEmpty ?? false) ||
+            (official.outline?.isNotEmpty ?? false));
+    if (hasContent) {
+      if (!context.mounted) return;
+      showDialog(
+        context: context,
+        builder: (c) => Dialog(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            child: AiConclusionPanel.buildContent(
+              c,
+              Theme.of(c),
+              official!,
+              tap: false,
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+    await fallback(
+      context: context,
+      ctr: ctr,
+      title: title,
+      upName: upName,
+    );
+  }
+
+  /// 卡片菜单的「AI总结」用这个：只有 bvid/cid，拿不到字幕列表。
+  /// 没有字幕就直接让 Mac 那边走「抓音频 + 转写」。
+  static Future<bool> fallbackByBvid({
+    required BuildContext context,
+    required String bvid,
+    required String cid,
+    String title = '',
+    String upName = '',
+  }) async {
+    final hit = ModSummaryService.cached(bvid, cid);
+    if (hit != null && hit.summary.isNotEmpty) {
+      if (context.mounted) _show(context, hit);
+      return true;
+    }
+    if (!ModSummaryService.configured) {
+      SmartDialog.showToast(
+        'B 站没有这个视频的现成总结\n要本地生成，请在设置里填「总结服务地址」',
+      );
+      return true;
+    }
+    SmartDialog.showToast('正在本地生成…没有字幕的话要先转写音频，会比较慢');
+    final res = await ModSummaryService.generate(
+      bvid: bvid,
+      cid: cid,
+      title: title,
+      upName: upName,
+    );
     if (res == null) {
       SmartDialog.showToast('连不上总结服务：${ModSummaryService.baseUrl}');
       return true;
