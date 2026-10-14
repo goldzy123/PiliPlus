@@ -51,6 +51,7 @@ import 'package:PiliPlus/plugin/pl_player/models/data_source.dart';
 import 'package:PiliPlus/plugin/pl_player/models/heart_beat_type.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
+import 'package:PiliPlus/mod/speed/up_speed_apply.dart';
 import 'package:PiliPlus/mod/speed/playback_speed_service.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/connectivity_utils.dart';
@@ -849,6 +850,10 @@ class VideoDetailController extends GetxController
       autoFullScreenFlag: autoFullScreenFlag,
     );
 
+    // [MOD-HOOK:up-speed-apply] 详情是异步加载的，取流这一刻 upMid 常常还没到，
+    // 所以 UP 强制倍速要在详情到位后再补一次（见 lib/mod/speed/up_speed_apply.dart）
+    UpSpeedApply.arm(ctr: this, autoSpeed: resolvedSpeed);
+
     unawaited(
       PlaybackSpeedService.warmAi(
         upMid: upMid,
@@ -1390,6 +1395,8 @@ class VideoDetailController extends GetxController
 
   @override
   void onClose() {
+    // [MOD-HOOK:up-speed-apply] 释放详情监听，别让它堆积
+    UpSpeedApply.release(bvid, cid.value);
     cid.close();
     if (isFileSource) {
       cacheLocalProgress();

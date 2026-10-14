@@ -31,6 +31,7 @@ import 'package:PiliPlus/plugin/pl_player/models/video_fit_type.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/danmaku_options.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart';
 import 'package:PiliPlus/services/service_locator.dart';
+import 'package:PiliPlus/mod/speed/up_speed_apply.dart';
 import 'package:PiliPlus/mod/player/playback_watchdog.dart';
 import 'package:PiliPlus/mod/speed/playback_speed_service.dart';
 import 'package:PiliPlus/utils/accounts.dart';
@@ -1253,6 +1254,9 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
   /// 设置倍速
   Future<void> setPlaybackSpeed(double speed, {bool save = true}) async {
+    // [MOD-HOOK:up-speed-apply] 用户手动改倍速（快捷按钮/官方菜单都走这里）
+    // → 这个视频后续不再被 UP 强制倍速覆盖。mod 自己设的时候不算。
+    UpSpeedApply.markUserTouched(_bvid, cid);
     lastPlaybackSpeed = playbackSpeed;
 
     if (speed == _videoPlayerController?.state.rate) return;
