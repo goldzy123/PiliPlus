@@ -14,6 +14,7 @@ import 'package:PiliPlus/common/widgets/pendant_avatar.dart';
 import 'package:PiliPlus/grpc/reply.dart';
 import 'package:PiliPlus/http/fav.dart';
 import 'package:PiliPlus/http/loading_state.dart';
+import 'package:PiliPlus/mod/ai_summary/summary_service.dart';
 import 'package:PiliPlus/models/common/audio_normalization.dart';
 import 'package:PiliPlus/models/common/dynamic/dynamics_type.dart';
 import 'package:PiliPlus/models/common/member/tab_type.dart';
@@ -528,6 +529,55 @@ List<SettingsModel> get extraSettings => [
     leading: Icon(Icons.engineering_outlined),
     setKey: SettingBoxKey.enableAi,
     defaultVal: false,
+  ),
+  // [MOD-HOOK:ai-summary] 自建总结服务地址（见 lib/mod/ai_summary/summary_service.dart）
+  NormalModel(
+    title: 'AI总结服务地址',
+    leading: const Icon(Icons.dns_outlined),
+    getSubtitle: () => ModSummaryService.configured
+        ? '${ModSummaryService.baseUrl}'
+              '\nB 站官方没有现成总结时，取字幕交给这台机器生成'
+        : '未设置。B 站官方只对部分视频生成过 AI 总结，'
+              '其它视频点开是空白；填上局域网里总结服务的地址后，'
+              '会自动取字幕（没有字幕就转写音频）生成一份。'
+              '形如 http://192.168.6.229:8721',
+    onTap: (_, setState) async {
+      final ctrl = TextEditingController(text: ModSummaryService.baseUrl);
+      final res = await showDialog<String>(
+        context: Get.context!,
+        builder: (context) => AlertDialog(
+          title: const Text('AI总结服务地址'),
+          content: TextField(
+            controller: ctrl,
+            autofocus: true,
+            keyboardType: TextInputType.url,
+            decoration: const InputDecoration(
+              hintText: 'http://192.168.6.229:8721',
+              helperText: '留空 = 关闭本地生成',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, ''),
+              child: const Text('清空'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, ctrl.text),
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      );
+      if (res != null) {
+        ModSummaryService.baseUrl = res;
+        SmartDialog.showToast(res.isEmpty ? '已关闭本地生成' : '已保存：$res');
+        setState();
+      }
+    },
   ),
   const SwitchModel(
     title: '消息页禁用"收到的赞"功能',

@@ -20,6 +20,7 @@ import 'package:PiliPlus/models_new/video/video_detail/staff.dart';
 import 'package:PiliPlus/models_new/video/video_detail/stat.dart';
 import 'package:PiliPlus/models_new/video/video_tag/data.dart';
 import 'package:PiliPlus/pages/mine/controller.dart';
+import 'package:PiliPlus/mod/ai_summary/ai_summary_ui.dart';
 import 'package:PiliPlus/mod/speed/speed_buttons.dart';
 import 'package:PiliPlus/pages/search/widgets/search_text.dart';
 import 'package:PiliPlus/pages/video/controller.dart';
@@ -990,7 +991,12 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
             if (summary?.isNotEmpty == true || outline?.isNotEmpty == true) {
               widget.showAiBottomSheet();
             } else {
-              SmartDialog.showToast("当前视频不支持AI视频总结");
+              // [MOD-HOOK:ai-summary-fallback] B 站没生成过这个视频的总结 —— 不再
+              // 一句"不支持"打发掉，改成取字幕让局域网的 Mac 生成一份。
+              await ModAiSummary.fallback(
+                context: context,
+                ctr: introController.videoDetailCtr,
+              );
             }
           }
         },
