@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:PiliPlus/models_new/video/video_play_info/data.dart';
 import 'package:PiliPlus/models_new/video/video_play_info/subtitle.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:dio/dio.dart';
@@ -77,9 +76,8 @@ abstract final class ModSummaryService {
   /// 优先中文（含官方 AI 字幕），实在没有再退而求其次。取回来的是
   /// B 站字幕 JSON（`body[].content`），这里拼成连续文本交给 LLM ——
   /// 比 VTT 少了时间轴噪声，同样的 token 能装下更多内容。
-  static Future<String?> fetchSubtitleText(PlayUrlModel data) async {
-    final list = data.subtitle?.subtitles;
-    if (list == null || list.isEmpty) return null;
+  static Future<String?> fetchSubtitleText(List<Subtitle> list) async {
+    if (list.isEmpty) return null;
     final best = _pickSubtitle(list);
     final url = best.subtitleUrlV2 ?? best.subtitleUrl;
     if (url == null || url.isEmpty) return null;
@@ -165,10 +163,13 @@ abstract final class ModSummaryService {
   }
 
   /// 取字幕 + 生成，一步到位（给 UI 用）。
+  ///
+  /// [subtitles] 直接来自 VideoDetailController.subtitles —— 视频页已经拿到的
+  /// 字幕列表（含官方 AI 字幕），不用再请求一次播放地址。
   static Future<ModSummaryResult?> generateFor({
     required String bvid,
     required String cid,
-    required PlayUrlModel? data,
+    List<Subtitle>? subtitles,
     String title = '',
     String upName = '',
     bool force = false,
@@ -179,8 +180,8 @@ abstract final class ModSummaryService {
       if (hit != null) return hit;
     }
     String? text;
-    if (data != null) {
-      text = await fetchSubtitleText(data);
+    if (subtitles != null && subtitles.isNotEmpty) {
+      text = await fetchSubtitleText(subtitles);
     }
     return generate(
       bvid: bvid,

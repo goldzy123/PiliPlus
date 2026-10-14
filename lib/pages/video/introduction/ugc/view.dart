@@ -996,6 +996,8 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
               await ModAiSummary.fallback(
                 context: context,
                 ctr: introController.videoDetailCtr,
+                title: introController.videoDetail.value.title ?? '',
+                upName: introController.videoDetail.value.owner?.name ?? '',
               );
             }
           }

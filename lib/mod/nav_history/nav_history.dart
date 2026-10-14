@@ -136,6 +136,31 @@ class NavHistoryService extends GetxController {
     }
 
     final title = _titleFrom(argMap, name);
+
+    // [MOD-HOOK:nav-history-dedup] 同一个位置重复进？
+    // 从同一个父节点反复打开同一个视频（比如来回切两个视频看），
+    // 原来每次都长一个新节点，树很快就被同一个标题刷屏、看不出"分叉"。
+    // 这里改成：父节点下已有同名同路由的子节点就复用，只加访问次数。
+    // 注意只跟**同一个父节点下的兄弟**比 —— 不同层级的同名页面是真·不同位置，
+    // 合并了反而会丢掉分叉结构。
+    if (parentId != null) {
+      final siblings = nodes[parentId]?.children;
+      if (siblings != null) {
+        for (final childId in siblings) {
+          final c = nodes[childId];
+          if (c != null && c.route == name && c.title == title) {
+            c.visits++;
+            c.args = argMap ?? c.args;
+            _routeNode[route] = childId;
+            _routeOrder.add(route);
+            _refreshStack();
+            version.value++;
+            return;
+          }
+        }
+      }
+    }
+
     final node = NavNode(
       id: ++_seq,
       parentId: parentId,

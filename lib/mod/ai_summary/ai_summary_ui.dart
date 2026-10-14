@@ -1,7 +1,6 @@
 import 'package:PiliPlus/mod/ai_summary/summary_service.dart';
 import 'package:PiliPlus/pages/video/controller.dart';
-import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 「AI 总结」在官方没货时的兜底 UI。
@@ -16,6 +15,8 @@ abstract final class ModAiSummary {
   static Future<bool> fallback({
     required BuildContext context,
     required VideoDetailController ctr,
+    String title = '',
+    String upName = '',
   }) async {
     final bvid = ctr.bvid;
     final cid = '${ctr.cid.value}';
@@ -39,9 +40,9 @@ abstract final class ModAiSummary {
     final res = await ModSummaryService.generateFor(
       bvid: bvid,
       cid: cid,
-      data: ctr.data,
-      title: ctr.videoDetail.value.title ?? '',
-      upName: ctr.currentUpName ?? '',
+      subtitles: ctr.subtitles.toList(),
+      title: title,
+      upName: upName,
     );
 
     if (res == null) {
