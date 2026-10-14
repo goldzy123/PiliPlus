@@ -69,6 +69,25 @@ jobs:
                   git remote add upstream https://github.com/bggRGjQaUbCoE/PiliPlus.git || true
                   git fetch --tags upstream main
 
+            - name: 变基到上游最新并推回
+              if: needs.prepare.outputs.build != 'false'
+              run: |
+                  set -e
+                  git config user.name "mod-bot"
+                  git config user.email "mod-bot@users.noreply.github.com"
+                  # 上游最新 release tag 拿不到就退回 main
+                  base=$(git tag --sort=-creatordate | grep -v '^mod-' | head -1 || true)
+                  [ -z "$base" ] && base=upstream/main
+                  base_sha=$(git rev-parse "$base^{commit}")
+                  if git merge-base --is-ancestor "$base_sha" HEAD; then
+                    echo "已经在 $base 之上，跳过变基"
+                  else
+                    echo "变基到 $base"
+                    # 冲突就让 job 失败（本地解），别硬推
+                    git rebase "$base"
+                    git push --force-with-lease origin "HEAD:${{ github.ref_name }}"
+                  fi
+
             - name: 决定是否需要构建
               id: decide
               run: |
@@ -135,27 +154,9 @@ jobs:
                   fetch-depth: 0
                   ref: ${{ github.ref }}
 
-            - name: 配置 git
-              run: |
-                  git config user.name "mod-bot"
-                  git config user.email "mod-bot@users.noreply.github.com"
-
-            - name: 变基到上游最新
-              run: |
-                  set -e
-                  git remote add upstream https://github.com/bggRGjQaUbCoE/PiliPlus.git || true
-                  git fetch --tags upstream main
-                  base='${{ needs.prepare.outputs.base }}'
-                  base_sha=$(git rev-parse "$base^{commit}")
-                  if git merge-base --is-ancestor "$base_sha" HEAD; then
-                    echo "已经在 $base 之上，跳过变基"
-                  else
-                    echo "变基到 $base"
-                    git rebase "$base"
-                    # 变基成功才推回去；失败就直接让 job 失败（本地解冲突）
-                    git push --force-with-lease origin "HEAD:${{ github.ref_name }}"
-                  fi
-
+            # 变基已经在 prepare 里做过一次了 —— 放在这里的话，
+            # matrix 的两个 job 会同时 rebase + push 同一个分支，互相打架
+            # （第一次运行就是这么失败的：dev 那个 job 在 push 时报错）。
             - name: 构建 Java 环境
               uses: actions/setup-java@v5
               with:

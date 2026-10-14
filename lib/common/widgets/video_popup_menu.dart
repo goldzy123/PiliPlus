@@ -89,6 +89,14 @@ class VideoPopupMenu extends StatelessWidget {
                         }
                       },
                     ),
+                  // [MOD-HOOK:nav-history-entry] 浏览历史树的直达入口。
+                  // 放在「AI总结」旁边：暂停/看视频时才最想「跳回之前那个位置」。
+                  // 原来放在设置页里，太深了。
+                  _VideoCustomAction(
+                    '浏览历史',
+                    const Icon(Icons.account_tree_outlined, size: 16),
+                    () => Get.toNamed('/navHistory'),
+                  ),
                 ],
                 if (videoItem is! SpaceArchiveItem) ...[
                   _VideoCustomAction(

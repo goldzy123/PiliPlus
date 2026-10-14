@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:PiliPlus/mod/player/perf_mode.dart';
 import 'package:PiliPlus/models/common/video/audio_quality.dart';
 import 'package:PiliPlus/models/common/video/cdn_type.dart';
 import 'package:PiliPlus/models/common/video/live_quality.dart';
@@ -165,10 +166,28 @@ List<SettingsModel> get videoSettings => [
     getSubtitle: () => '当前：${Pref.autosync}（此项即mpv的--autosync）',
     onTap: _showAutoSyncDialog,
   ),
+  // [MOD-HOOK:perf-mode] 弱机/车机性能模式（见 lib/mod/player/perf_mode.dart）
+  NormalModel(
+    title: '弱机性能模式',
+    leading: const Icon(Icons.speed_outlined),
+    getSubtitle: () => ModPerfMode.enabled
+        ? '已开启：video-sync=audio + 解码前丢帧 + 关缩放抖动/HDR 映射 + 小缓存'
+        : '针对骁龙665这类弱机：画面跟不上就丢帧跟音频。'
+              '${ModPerfMode.looksWeak ? "（本机 CPU 核数偏低，可能用得上）" : ""}',
+    onTap: (_, setState) {
+      ModPerfMode.enabled = !ModPerfMode.enabled;
+      SmartDialog.showToast(
+        ModPerfMode.enabled ? '已开启弱机性能模式，重新进入播放页生效' : '已关闭',
+      );
+      setState();
+    },
+  ),
   NormalModel(
     title: '视频同步',
     leading: const Icon(Icons.view_timeline_outlined),
-    getSubtitle: () => '当前：${Pref.videoSync}（此项即mpv的--video-sync）',
+    getSubtitle: () => ModPerfMode.enabled
+        ? '当前：audio（弱机性能模式已覆盖此项）'
+        : '当前：${Pref.videoSync}（此项即mpv的--video-sync）',
     onTap: _showVideoSyncDialog,
   ),
   NormalModel(

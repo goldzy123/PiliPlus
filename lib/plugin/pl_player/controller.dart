@@ -31,6 +31,7 @@ import 'package:PiliPlus/plugin/pl_player/models/video_fit_type.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/danmaku_options.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart';
 import 'package:PiliPlus/services/service_locator.dart';
+import 'package:PiliPlus/mod/player/perf_mode.dart';
 import 'package:PiliPlus/mod/speed/up_speed_apply.dart';
 import 'package:PiliPlus/mod/player/playback_watchdog.dart';
 import 'package:PiliPlus/mod/speed/playback_speed_service.dart';
@@ -874,6 +875,9 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       opt['autosync'] = autosync;
     }
 
+    // [MOD-HOOK:perf-mode] 弱机性能模式（见 lib/mod/player/perf_mode.dart）
+    opt.addAll(ModPerfMode.mpvOptions);
+
     final player = await Player.create(
       configuration: PlayerConfiguration(
         logLevel: kDebugMode ? .warn : .error,
@@ -952,6 +956,9 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         ...liveBuffer
       else
         ...buffer,
+      // [MOD-HOOK:perf-mode] 文件级选项优先级高于播放器级，所以缓存/丢帧这类
+      // 要在这里再覆盖一次，否则会被上面的 buffer 覆盖回去。
+      ...ModPerfMode.mpvOptions,
     };
 
     String video = dataSource.videoSource;
