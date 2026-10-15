@@ -781,6 +781,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       // 配置Player 音轨、字幕等等
       await _createVideoController(dataSource, seekTo, volume);
 
+
       if (_playerCount == 0) {
         _removeListeners();
         _videoPlayerController?.dispose();
