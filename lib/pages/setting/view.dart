@@ -179,11 +179,13 @@ class _SettingPageState extends State<SettingPage> {
       padding: EdgeInsets.only(bottom: padding.bottom + 100),
       children: [
         _buildSearchItem(theme),
+        // [MOD-HOOK:setting-favorites-scope] 收藏 + 最近修改统一收在这里，
+        // 不再往每个设置列表里各塞一份（那样每个页面开头都挂着同一坨）。
         ListTile(
           onTap: () => Get.toNamed('/settingFavorites'),
           leading: const Icon(Icons.star_outline),
-          title: Text('收藏', style: titleStyle),
-          subtitle: Text('常用设置与最近修改', style: subTitleStyle),
+          title: Text('常用设置', style: titleStyle),
+          subtitle: Text('收藏的 + 最近改过的，都在这一个地方', style: subTitleStyle),
         ),
         // [MOD-HOOK:settings-sync]
         ListTile(

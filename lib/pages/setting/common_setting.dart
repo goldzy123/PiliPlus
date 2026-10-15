@@ -49,42 +49,9 @@ class _CommonSettingState extends State<CommonSetting> {
     padding = MediaQuery.viewPaddingOf(context);
   }
 
-  List<SettingRef> _favoriteRefs() {
-    return SettingFavorites.favorites
-        .map((id) => refs[id])
-        .whereType<SettingRef>()
-        .toList();
-  }
-
-  List<SettingRef> _recentRefs() {
-    return SettingFavorites.recent
-        .map((id) => refs[id])
-        .whereType<SettingRef>()
-        .toList();
-  }
-
   Future<void> _toggleFavorite(String id) async {
     await SettingFavorites.toggleFavorite(id);
     if (mounted) setState(() {});
-  }
-
-  Future<void> _favoriteFromRecent(String id) async {
-    await SettingFavorites.toggleFavorite(id);
-    await SettingFavorites.removeRecent(id);
-    if (mounted) setState(() {});
-  }
-
-  Widget _sectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 12,
-          color: Theme.of(context).colorScheme.outline,
-        ),
-      ),
-    );
   }
 
   Widget _tile(
@@ -117,15 +84,12 @@ class _CommonSettingState extends State<CommonSetting> {
   @override
   Widget build(BuildContext context) {
     final showAppBar = widget.showAppBar;
-    final favorites = _favoriteRefs();
-    final recent = _recentRefs();
-    final hasFav = favorites.isNotEmpty;
-    final hasRecent = recent.isNotEmpty;
-    final itemCount =
-        settings.length +
-        (hasFav ? favorites.length + 1 : 0) +
-        (hasRecent ? recent.length + 1 : 0);
 
+    // [MOD-HOOK:setting-favorites-scope] 原来这里把「收藏」「最近修改」两块
+    // 注入到**每一个**设置列表的顶部（itemCount 里加、itemBuilder 里先渲染），
+    // 结果每个页面开头都挂着同样一坨，正常选项要滚半天才看到。
+    // 现在这里只渲染本页自己的项；收藏和最近统一收进 /settingFavorites
+    // （设置页顶部有入口），互不干扰。
     return SimpleScaffold(
       appBar: showAppBar ? AppBar(title: Text(widget.settingType.title)) : null,
       body: ListView.builder(
@@ -135,36 +99,9 @@ class _CommonSettingState extends State<CommonSetting> {
           right: showAppBar ? padding.right : 0,
           bottom: padding.bottom + 100,
         ),
-        itemCount: itemCount,
+        itemCount: settings.length,
         itemBuilder: (context, index) {
-          int cursor = 0;
-          if (hasFav) {
-            if (index == cursor) return _sectionHeader('收藏');
-            cursor++;
-            if (index < cursor + favorites.length) {
-              final ref = favorites[index - cursor];
-              return _tile(
-                ref.model,
-                isFavorite: true,
-                onLongPress: () => _toggleFavorite(ref.id),
-              );
-            }
-            cursor += favorites.length;
-          }
-          if (hasRecent) {
-            if (index == cursor) return _sectionHeader('最近修改');
-            cursor++;
-            if (index < cursor + recent.length) {
-              final ref = recent[index - cursor];
-              return _tile(
-                ref.model,
-                isFavorite: SettingFavorites.isFavorite(ref.id),
-                onLongPress: () => _favoriteFromRecent(ref.id),
-              );
-            }
-            cursor += recent.length;
-          }
-          final model = settings[index - cursor];
+          final model = settings[index];
           final id = model.effectiveTitle;
           return _tile(
             model,

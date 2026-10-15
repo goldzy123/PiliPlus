@@ -31,6 +31,7 @@ import 'package:PiliPlus/plugin/pl_player/models/video_fit_type.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/danmaku_options.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart';
 import 'package:PiliPlus/services/service_locator.dart';
+import 'package:PiliPlus/mod/diagnostics/mod_log.dart';
 import 'package:PiliPlus/mod/player/perf_mode.dart';
 import 'package:PiliPlus/mod/speed/up_speed_apply.dart';
 import 'package:PiliPlus/mod/player/playback_watchdog.dart';
@@ -738,6 +739,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     Volume? volume,
     bool autoFullScreenFlag = false,
   }) async {
+    ModLog.write('loud', 'setDataSource norm=$enableAudioNormalization pref=${Pref.audioNormalization}');
     try {
       _processing = true;
       this.isLive = isLive;
@@ -908,6 +910,9 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     // [MOD-HOOK:playback-watchdog] 「声音在走但画面冻住」自愈。
     // 触发场景：seek 之后、切后台回来音频设备/surface 被重建之后。
     _playbackWatchdog?.stop();
+    // v2：预热 12s、用 mpv 的 paused-for-cache 判缓冲、自愈后冷却 30s 且最多 3 次。
+    // v1 在弱机上会把"起播/缓冲"误判成卡死，然后反复 seek 打断播放（车机上表现为
+    // "刚开始播就说掉帧、又从头开始、无限循环"）。
     _playbackWatchdog = PlaybackWatchdog(
       player: player,
       isPlaying: () => playerStatus == .playing,
@@ -962,6 +967,11 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     };
 
     String video = dataSource.videoSource;
+    // [MOD-HOOK:loudness] 响度均衡必须在**任何**情况下都尝试挂上。
+    // 原来只在 dataSource.audioSource 非空时调用 audioFilterExtras ——
+    // 没有独立音频流时整个滤镜就没设，用户看到的就是"响度均衡没落地"。
+    audioFilterExtras(volume, map: extras);
+
     if (dataSource.audioSource case final audio? when (audio.isNotEmpty)) {
       if (onlyPlayAudio.value) {
         video = audio;
@@ -976,7 +986,6 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
             // '!delay_open,media_type=audio;'
             '%${isFileSource ? utf8.encode(audio).length : audio.length}%$audio');
       }
-      audioFilterExtras(volume, map: extras);
     }
 
     assert(!isLive || seekTo == null);

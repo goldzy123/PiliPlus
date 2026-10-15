@@ -918,9 +918,19 @@ class VideoDetailController extends GetxController
     }
   }
 
-  /// 从播放页进入设置，返回后停播并重新加载当前视频
+  /// 从播放页进入设置，返回后停播并重新加载当前视频。
+  ///
+  /// [MOD-HOOK:setting-resume] 原来只写 playedTime，回来会从头播。
+  /// 原因：playerInit 里的取位置是 `seek = defaultST ?? playedTime` ——
+  /// **defaultST 优先**，而它在别的路径里可能是 null、也可能是 Duration.zero
+  /// （"从头播"的意思）。所以这里必须把两个都写成当前位置，
+  /// 并且显式挡掉 zero，否则 `if (seek == .zero) seek = null` 会把它当没设过。
   Future<void> openSettingAndReload() async {
-    playedTime = plPlayerController.videoPlayerController?.state.position;
+    final pos = plPlayerController.videoPlayerController?.state.position;
+    if (pos != null && pos > Duration.zero) {
+      playedTime = pos;
+      defaultST = pos;
+    }
     await plPlayerController.pause();
     await Get.toNamed('/setting');
     if (isClosed) return;
